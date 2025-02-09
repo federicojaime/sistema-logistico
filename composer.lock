@@ -7,7 +7,7 @@
     "content-hash": "6c3e1ad53dd710b722db0981797e2ef8",
     "packages": [
         {
-            "name": "guzzlehttp/guzzle",
+             "name": "guzzlehttp/guzzle",
             "version": "7.9.2",
             "source": {
                 "type": "git",
