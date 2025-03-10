@@ -5,6 +5,29 @@ import { useShipments } from '../contexts/ShipmentsContext';
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
+import SimpleMapModal from './SimpleMapModal';
+
+// Importaciones de Leaflet
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import 'esri-leaflet-geocoder/dist/esri-leaflet-geocoder.css';
+import * as ELG from 'esri-leaflet-geocoder';
+
+// Corregir los iconos de Leaflet para React
+import icon from 'leaflet/dist/images/marker-icon.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+
+let DefaultIcon = L.icon({
+  iconUrl: icon,
+  shadowUrl: iconShadow,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+L.Marker.prototype.options.icon = DefaultIcon;
 
 const INITIAL_SHIPMENT = {
   refCode: '', // Manual reference code
@@ -38,6 +61,205 @@ const INITIAL_ITEM = {
   pesoTotal: 0,
   valorTotal: 15,
 };
+
+// Componente que maneja los eventos del mapa
+function LocationMarker({ position, setPosition }) {
+  const map = useMapEvents({
+    click: (e) => {
+      setPosition(e.latlng);
+      map.flyTo(e.latlng, map.getZoom());
+    }
+  });
+
+  return position === null ? null : (
+    <Marker position={position} />
+  );
+}
+
+// Componente para el mapa
+const MapComponent = ({ initialLocation, onSelectLocation }) => {
+  const [position, setPosition] = useState(initialLocation || { lat: 25.761681, lng: -80.191788 });
+  const [address, setAddress] = useState('');
+  const searchInputRef = React.useRef(null);
+  const mapRef = React.useRef(null);
+  const geocodeServiceRef = React.useRef(null);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    // Inicializar el servicio de geocodificación
+    geocodeServiceRef.current = ELG.geocodeService({
+      apikey: 'AAPK5513ccc3de4c4c02ae4aca2ebe6a91e0XXIyF0JKtQy5pFXnkKdNAcvb3QEeuxktxO1EfUKkBcVLo5bLwL-LFqGY2a5KUm5'
+    });
+
+    // Si se pasa una ubicación inicial, establecer la dirección
+    if (initialLocation && initialLocation.lat && initialLocation.lng) {
+      reverseGeocode(initialLocation);
+    }
+  }, [initialLocation]);
+
+  // Función para geocodificar una dirección
+  const geocodeAddress = async () => {
+    if (!address || !geocodeServiceRef.current || !mapRef.current) return;
+
+    try {
+      geocodeServiceRef.current.geocode().text(address).run((err, results) => {
+        if (err) {
+          console.error("Error geocodificando la dirección:", err);
+          return;
+        }
+
+        if (results.results && results.results.length > 0) {
+          const { lat, lng } = results.results[0].latlng;
+          setPosition({ lat, lng });
+          mapRef.current.flyTo([lat, lng], 15);
+        } else {
+          console.warn("No se encontraron resultados para la dirección");
+        }
+      });
+    } catch (error) {
+      console.error("Error en la geocodificación:", error);
+    }
+  };
+
+  // Función para geocodificación inversa (coordenadas a dirección)
+  const reverseGeocode = (latlng) => {
+    if (!geocodeServiceRef.current) return;
+
+    try {
+      geocodeServiceRef.current.reverse().latlng(latlng).run((error, result) => {
+        if (error) {
+          console.error("Error en geocodificación inversa:", error);
+          return;
+        }
+
+        if (result && result.address) {
+          const fullAddress = [
+            result.address.Address,
+            result.address.City,
+            result.address.Region,
+            result.address.Postal,
+            result.address.CountryCode
+          ].filter(Boolean).join(', ');
+
+          setAddress(fullAddress);
+        }
+      });
+    } catch (error) {
+      console.error("Error en la geocodificación inversa:", error);
+    }
+  };
+
+  // Cuando cambia la posición, hacer geocodificación inversa
+  useEffect(() => {
+    if (position && position.lat && position.lng) {
+      reverseGeocode(position);
+    }
+  }, [position]);
+
+  // Manejar la selección de ubicación
+  const handleSelectLocation = () => {
+    if (position && address) {
+      onSelectLocation({
+        lat: position.lat,
+        lng: position.lng,
+        address: address
+      });
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex gap-2">
+        <input
+          ref={searchInputRef}
+          type="text"
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Ingresar dirección"
+        />
+        <button
+          onClick={geocodeAddress}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          Buscar
+        </button>
+      </div>
+
+      <div className="h-64 border rounded-lg overflow-hidden">
+        <MapContainer
+          center={[position.lat, position.lng]}
+          zoom={13}
+          style={{ height: '100%', width: '100%' }}
+          whenCreated={mapInstance => {
+            mapRef.current = mapInstance;
+          }}
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          <LocationMarker position={position} setPosition={setPosition} />
+        </MapContainer>
+      </div>
+
+      <div className="text-sm text-gray-600">
+        <p><strong>Latitud:</strong> {position.lat.toFixed(6)}</p>
+        <p><strong>Longitud:</strong> {position.lng.toFixed(6)}</p>
+        <p><strong>Dirección:</strong> {address || 'No disponible'}</p>
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          onClick={handleSelectLocation}
+          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+        >
+          Confirmar ubicación
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/* Modal de selección de mapa
+const MapSelectModal = ({ isOpen, onClose, onSelectLocation, initialAddress = "" }) => {
+  if (!isOpen) return null;
+
+  // Convertir initialAddress a coordenadas iniciales si es necesario
+  const initialLocation = initialAddress 
+    ? null  // El componente MapComponent utilizará una ubicación predeterminada
+    : { lat: 25.761681, lng: -80.191788 }; // Default a Miami
+
+  const handleSelectLocation = (location) => {
+    onSelectLocation(location);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl overflow-hidden">
+        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
+          <h2 className="text-xl font-bold text-gray-800">Seleccionar ubicación</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="p-6">
+          <MapComponent 
+            initialLocation={initialLocation}
+            onSelectLocation={handleSelectLocation}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+*/
 
 const ItemForm = ({ onAdd, className = '' }) => {
   const [item, setItem] = useState(INITIAL_ITEM);
@@ -238,104 +460,6 @@ const ItemsTable = ({ items, onRemove }) => {
   );
 };
 
-// Map selection modal component
-const MapSelectModal = ({ isOpen, onClose, onSelectLocation, initialAddress = "" }) => {
-  const [searchAddress, setSearchAddress] = useState(initialAddress);
-  const [location, setLocation] = useState({ lat: 25.761681, lng: -80.191788 }); // Default to Miami
-
-  const handleSearch = async () => {
-    try {
-      // This would use a geocoding service
-      // For now, we'll simulate it with a timeout
-      setTimeout(() => {
-        // Simulate finding a location - in a real implementation, this would
-        // use Google Maps, Mapbox, or another geocoding service
-        const newLoc = {
-          lat: location.lat + (Math.random() - 0.5) * 0.01,
-          lng: location.lng + (Math.random() - 0.5) * 0.01,
-          address: searchAddress
-        };
-        setLocation(newLoc);
-      }, 500);
-    } catch (error) {
-      console.error("Error searching address:", error);
-    }
-  };
-
-  const handleSelect = () => {
-    onSelectLocation({
-      lat: location.lat,
-      lng: location.lng,
-      address: searchAddress
-    });
-    onClose();
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl overflow-hidden">
-        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-800">Seleccionar ubicación</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        <div className="p-6">
-          <div className="mb-4 flex gap-2">
-            <input
-              type="text"
-              value={searchAddress}
-              onChange={(e) => setSearchAddress(e.target.value)}
-              className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Ingresar dirección"
-            />
-            <button
-              onClick={handleSearch}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Buscar
-            </button>
-          </div>
-
-          <div className="h-64 bg-gray-100 rounded-lg flex items-center justify-center mb-4">
-            {/* This would be replaced with an actual map component */}
-            <div className="text-center">
-              <MapPin className="w-8 h-8 mx-auto text-red-500" />
-              <p className="mt-2 text-sm text-gray-600">
-                Mapa simulado: {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
-              </p>
-              <p className="text-xs text-gray-500">
-                (En la implementación real, aquí se mostraría un mapa interactivo)
-              </p>
-            </div>
-          </div>
-
-          <div className="text-sm text-gray-600 mb-4">
-            <p><strong>Latitud:</strong> {location.lat.toFixed(6)}</p>
-            <p><strong>Longitud:</strong> {location.lng.toFixed(6)}</p>
-            <p><strong>Dirección:</strong> {searchAddress}</p>
-          </div>
-
-          <div className="flex justify-end">
-            <button
-              onClick={handleSelect}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-            >
-              Confirmar ubicación
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 export function CreateShipment({ onClose }) {
   const navigate = useNavigate();
   const { addShipment } = useShipments();
@@ -346,7 +470,7 @@ export function CreateShipment({ onClose }) {
   const [transportistas, setTransportistas] = useState([]);
   const [loadingTransportistas, setLoadingTransportistas] = useState(true);
   const [showError, setShowError] = useState(false);
-  
+
   // Map selection state
   const [showOriginMap, setShowOriginMap] = useState(false);
   const [showDestinationMap, setShowDestinationMap] = useState(false);
@@ -356,12 +480,12 @@ export function CreateShipment({ onClose }) {
     // Esta función actualiza los items relacionados con servicios
     const updateServiceItems = () => {
       // Empezamos eliminando cualquier item de servicio existente
-      const regularItems = shipment.items.filter(item => 
+      const regularItems = shipment.items.filter(item =>
         !['Lift Gate Service', 'Appointment Service', 'Pallet Jack Service'].includes(item.descripcion)
       );
-      
+
       let serviceItems = [];
-      
+
       // Agregamos los items correspondientes a los servicios seleccionados
       if (shipment.liftGate === 'YES') {
         serviceItems.push({
@@ -372,7 +496,7 @@ export function CreateShipment({ onClose }) {
           valorTotal: shipment.servicePrices.liftGate
         });
       }
-      
+
       if (shipment.appointment === 'YES') {
         serviceItems.push({
           id: 'service-appointment',
@@ -382,7 +506,7 @@ export function CreateShipment({ onClose }) {
           valorTotal: shipment.servicePrices.appointment
         });
       }
-      
+
       if (shipment.palletJack === 'YES') {
         serviceItems.push({
           id: 'service-palletjack',
@@ -392,14 +516,14 @@ export function CreateShipment({ onClose }) {
           valorTotal: shipment.servicePrices.palletJack
         });
       }
-      
+
       // Actualizamos la lista de items con los regulares y los de servicio
       setShipment(prev => ({
         ...prev,
         items: [...regularItems, ...serviceItems]
       }));
     };
-    
+
     updateServiceItems();
   }, [shipment.liftGate, shipment.appointment, shipment.palletJack, shipment.servicePrices]);
 
@@ -503,7 +627,7 @@ export function CreateShipment({ onClose }) {
     // No permitimos eliminar items de servicio directamente (se eliminan al desactivar el servicio)
     if (typeof itemId === 'string' && itemId.startsWith('service-')) {
       const serviceType = itemId.replace('service-', '');
-      
+
       if (serviceType === 'liftgate') {
         setShipment(prev => ({ ...prev, liftGate: 'NO' }));
       } else if (serviceType === 'appointment') {
@@ -1046,20 +1170,28 @@ export function CreateShipment({ onClose }) {
           </div>
         </form>
       </div>
-      
+
       {/* Modales de Mapa */}
-      <MapSelectModal
+      <SimpleMapModal
         isOpen={showOriginMap}
         onClose={() => setShowOriginMap(false)}
         onSelectLocation={handleSelectOriginLocation}
-        initialAddress={shipment.direccionOrigen}
+        initialAddress={{
+          address: shipment.direccionOrigen,
+          lat: shipment.latitudOrigen ? parseFloat(shipment.latitudOrigen) : null,
+          lng: shipment.longitudOrigen ? parseFloat(shipment.longitudOrigen) : null
+        }}
       />
-      
-      <MapSelectModal
+
+      <SimpleMapModal
         isOpen={showDestinationMap}
         onClose={() => setShowDestinationMap(false)}
         onSelectLocation={handleSelectDestinationLocation}
-        initialAddress={shipment.direccionDestino}
+        initialAddress={{
+          address: shipment.direccionDestino,
+          lat: shipment.latitudDestino ? parseFloat(shipment.latitudDestino) : null,
+          lng: shipment.longitudDestino ? parseFloat(shipment.longitudDestino) : null
+        }}
       />
     </div>
   );
