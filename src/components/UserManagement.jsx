@@ -109,6 +109,34 @@ export function UserManagement() {
         }
     };
 
+    // Función para obtener la etiqueta del rol
+    const getRoleLabel = (role) => {
+        switch (role) {
+            case 'admin':
+                return 'Administrativo';
+            case 'contable':
+                return 'Contable';
+            case 'transportista':
+                return 'Transportista';
+            default:
+                return role;
+        }
+    };
+
+    // Función para obtener las clases de estilo según el rol
+    const getRoleClasses = (role) => {
+        switch (role) {
+            case 'admin':
+                return 'bg-purple-100 text-purple-800';
+            case 'contable':
+                return 'bg-blue-100 text-blue-800';
+            case 'transportista':
+                return 'bg-green-100 text-green-800';
+            default:
+                return 'bg-gray-100 text-gray-800';
+        }
+    };
+
     if (loading && users.length === 0) {
         return <div className="flex justify-center items-center min-h-screen">Cargando...</div>;
     }
@@ -218,6 +246,7 @@ export function UserManagement() {
                                         required
                                     >
                                         <option value="transportista">Transportista</option>
+                                        <option value="contable">Contable</option>
                                         <option value="admin">Administrativo</option>
                                     </select>
                                 </div>
@@ -272,12 +301,8 @@ export function UserManagement() {
                                         {`${user.firstname} ${user.lastname}`}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                            user.role === 'admin'
-                                                ? 'bg-purple-100 text-purple-800'
-                                                : 'bg-green-100 text-green-800'
-                                        }`}>
-                                            {user.role === 'admin' ? 'Administrativo' : 'Transportista'}
+                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getRoleClasses(user.role)}`}>
+                                            {getRoleLabel(user.role)}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

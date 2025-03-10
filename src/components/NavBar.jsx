@@ -18,18 +18,27 @@ export function NavBar() {
           </div>
 
           <div className="flex items-center space-x-4">
+            {/* Enlaces basados en el rol del usuario */}
+            {user.role !== 'contable' && (
+              <Link
+                to="/"
+                className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+              >
+                Pedidos
+              </Link>
+            )}
+
+            {/* Mostrar enlace a Facturas para todos los roles */}
             <Link
-              to="/"
+              to="/logistica/facturas"
               className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
             >
-              Pedidos
+              Facturas
             </Link>
-
-
 
             {user.role === 'admin' && (
               <>
-                {/* Agregar enlace a Clientes - visible para todos los usuarios */}
+                {/* Agregar enlace a Clientes - visible solo para administradores */}
                 <Link
                   to="/logistica/clientes"
                   className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
@@ -41,12 +50,6 @@ export function NavBar() {
                   className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
                 >
                   Crear Envío
-                </Link>
-                <Link
-                  to="/logistica/facturas"
-                  className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
-                >
-                  Facturas
                 </Link>
                 <Link
                   to="/logistica/usuarios"
@@ -62,11 +65,10 @@ export function NavBar() {
                 <User className="w-5 h-5 text-gray-500" />
                 <span className="text-sm font-medium text-gray-700">
                   {user.name}
-                  {user.role === 'transportista' && (
-                    <span className="ml-2 text-xs font-normal text-gray-500">
-                      (Transportista)
-                    </span>
-                  )}
+                  {/* Mostrar el rol del usuario junto a su nombre */}
+                  <span className="ml-2 text-xs font-normal text-gray-500">
+                    {user.role === 'transportista' ? '(Transportista)' : user.role === 'contable' ? '(Contable)' : '(Admin)'}
+                  </span>
                 </span>
               </div>
 

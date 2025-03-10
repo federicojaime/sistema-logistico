@@ -37,6 +37,18 @@ export const AuthProvider = ({ children }) => {
       return false;
     }
   };
+  
+  // Obtener la ruta inicial según el rol del usuario
+  const getInitialRoute = (userRole) => {
+    switch (userRole) {
+      case 'contable':
+        return '/logistica/facturas';
+      case 'transportista':
+      case 'admin':
+      default:
+        return '/logistica/home';
+    }
+  };
 
   const logout = () => {
     try {
@@ -62,7 +74,13 @@ export const AuthProvider = ({ children }) => {
   }, [user]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      login, 
+      logout,
+      getInitialRoute 
+    }}>
       {children}
     </AuthContext.Provider>
   );

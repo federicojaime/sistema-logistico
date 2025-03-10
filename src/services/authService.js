@@ -7,11 +7,12 @@ export const authService = {
             const response = await api.post('/login', { email, password });
 
             // Verificar la estructura de la respuesta
-            if (!response.ok || !response.data || !response.data.token) {
-                throw new Error('No token received');
+            if (!response || !response.data || !response.data.token) {
+                console.error('Estructura de respuesta inválida:', response);
+                return { ok: false, error: 'No token received' };
             }
 
-            // Extraer el token eliminando el prefijo "Bearer "
+            // Extraer el token eliminando el prefijo "Bearer " si existe
             const token = response.data.token.replace('Bearer ', '');
 
             const userData = {
@@ -53,6 +54,7 @@ export const authService = {
             return null;
         }
     },
+    
     getUsers: async () => {
         try {
             return await api.get('/users');

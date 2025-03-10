@@ -28,7 +28,20 @@ export function Login() {
       console.log('Respuesta del login:', success);
 
       if (success) {
-        navigate('/logistica/home');
+        // Obtener el usuario actual y redirigir según su rol
+        const currentUser = authService.getCurrentUser();
+        if (currentUser) {
+          // Redirigir según el rol
+          if (currentUser.role === 'contable') {
+            navigate('/logistica/facturas');
+          } else if (currentUser.role === 'transportista') {
+            navigate('/logistica/home');
+          } else {
+            navigate('/logistica/home');
+          }
+        } else {
+          navigate('/logistica/home'); // Default fallback
+        }
       } else {
         setError('Credenciales inválidas');
       }

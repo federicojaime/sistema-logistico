@@ -20,7 +20,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ShipmentsProvider } from './contexts/ShipmentsContext';
 
 // Ruta privada
-const PrivateRoute = ({ children }) => {
+const PrivateRoute = ({ children, allowedRoles = [] }) => {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -29,6 +29,18 @@ const PrivateRoute = ({ children }) => {
 
   if (!user) {
     return <Navigate to="/logistica/login" replace />;
+  }
+
+  // Si hay roles permitidos especificados y el usuario no tiene uno de ellos
+  if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
+    // Redirigir a una página permitida según su rol
+    if (user.role === 'transportista') {
+      return <Navigate to="/logistica/home" replace />;
+    } else if (user.role === 'contable') {
+      return <Navigate to="/logistica/facturas" replace />;
+    } else {
+      return <Navigate to="/logistica/home" replace />;
+    }
   }
 
   return (
@@ -49,7 +61,7 @@ const AppRoutes = () => {
         <Route
           path="/logistica/home"
           element={
-            <PrivateRoute>
+            <PrivateRoute allowedRoles={['admin', 'transportista']}>
               <ShipmentList />
             </PrivateRoute>
           }
@@ -57,7 +69,7 @@ const AppRoutes = () => {
         <Route
           path="/logistica/clientes"
           element={
-            <PrivateRoute>
+            <PrivateRoute allowedRoles={['admin']}>
               <ClientList />
             </PrivateRoute>
           }
@@ -65,7 +77,7 @@ const AppRoutes = () => {
         <Route
           path="/logistica/crear-envio"
           element={
-            <PrivateRoute>
+            <PrivateRoute allowedRoles={['admin']}>
               <CreateShipment />
             </PrivateRoute>
           }
@@ -73,7 +85,7 @@ const AppRoutes = () => {
         <Route
           path="/logistica/usuarios"
           element={
-            <PrivateRoute>
+            <PrivateRoute allowedRoles={['admin']}>
               <UserManagement />
             </PrivateRoute>
           }
@@ -81,7 +93,7 @@ const AppRoutes = () => {
         <Route
           path="/logistica/facturas"
           element={
-            <PrivateRoute>
+            <PrivateRoute allowedRoles={['admin', 'contable']}>
               <Invoices />
             </PrivateRoute>
           }
