@@ -205,8 +205,8 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
 
       <div className="mt-2 text-sm text-gray-600 mb-2">
         <p className="text-xs text-gray-500 mb-2 italic">Para mover el marcador: haz clic en un punto del mapa o arrastra el pin a la ubicación deseada.</p>
-        <p><strong>Latitud:</strong> {position.lat.toFixed(6)}</p>
-        <p><strong>Longitud:</strong> {position.lng.toFixed(6)}</p>
+        <p><strong>Latitud:</strong> {Number(position.lat).toFixed(6)}</p>
+        <p><strong>Longitud:</strong> {Number(position.lng).toFixed(6)}</p>
         <p><strong>Dirección:</strong> {address || 'No disponible'}</p>
       </div>
 

@@ -13,7 +13,8 @@ import {
   Package,
   Download,
   Edit,
-  Save
+  Save,
+  MapPin
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useShipments } from '../contexts/ShipmentsContext';
@@ -21,6 +22,7 @@ import { useAuth } from '../contexts/AuthContext';
 import InvoiceModal from './InvoiceModal';
 import { Alert, AlertDescription } from './ui/alert';
 import { shipmentsService } from '../services/shipmentsService';
+import SimpleMapModal from './SimpleMapModal';
 import api from '../services/api';
 
 const statusMap = {
@@ -91,6 +93,8 @@ export function ShipmentList() {
   const [editData, setEditData] = useState(null);
   const [transportistas, setTransportistas] = useState([]);
   const [loadingTransportistas, setLoadingTransportistas] = useState(false);
+  const [showOriginMap, setShowOriginMap] = useState(false);
+  const [showDestinationMap, setShowDestinationMap] = useState(false);
 
   // Función común para verificar si un envío puede ser editado
   const canEdit = (shipment) => {
@@ -177,6 +181,26 @@ export function ShipmentList() {
     }));
   };
 
+  // Manejar la selección de ubicación de origen
+  const handleSelectOriginLocation = (location) => {
+    setEditData(prev => ({
+      ...prev,
+      origin_address: location.address,
+      origin_lat: location.lat,
+      origin_lng: location.lng
+    }));
+  };
+
+  // Manejar la selección de ubicación de destino
+  const handleSelectDestinationLocation = (location) => {
+    setEditData(prev => ({
+      ...prev,
+      destination_address: location.address,
+      destination_lat: location.lat,
+      destination_lng: location.lng
+    }));
+  };
+
   // Manejar cambios en items
   const handleItemChange = (index, field, value) => {
     setEditData(prev => ({
@@ -209,7 +233,23 @@ export function ShipmentList() {
   // Guardar cambios
   const handleSaveChanges = async () => {
     try {
-      const response = await shipmentsService.updateShipment(editData.id, editData);
+      // Asegúrate de que todos los campos necesarios estén presentes
+      if (!editData.origin_address || !editData.destination_address) {
+        setSuccessMessage('Las direcciones de origen y destino son obligatorias');
+        return;
+      }
+
+      // Crear una copia del objeto para modificar los valores
+      const dataToSend = {
+        ...editData,
+        // Convertir explícitamente a strings
+        origin_lat: String(editData.origin_lat),
+        origin_lng: String(editData.origin_lng),
+        destination_lat: String(editData.destination_lat),
+        destination_lng: String(editData.destination_lng)
+      };
+
+      const response = await shipmentsService.updateShipment(editData.id, dataToSend);
       if (response && (response.ok || response.status === 200)) {
         setSuccessMessage('Envío actualizado correctamente');
         refreshShipments();
@@ -344,7 +384,8 @@ export function ShipmentList() {
       const matchesSearch =
         searchQuery === '' ||
         (shipment.customer && shipment.customer.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (shipment.destination_address && shipment.destination_address.toLowerCase().includes(searchQuery.toLowerCase()));
+        (shipment.destination_address && shipment.destination_address.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (shipment.ref_code && shipment.ref_code.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchesStatus =
         selectedStatus === 'todos' ||
@@ -528,7 +569,7 @@ export function ShipmentList() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    ID
+                    Referencia
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Cliente
@@ -553,7 +594,7 @@ export function ShipmentList() {
                 {filteredAndSortedShipments.map((shipment) => (
                   <tr key={shipment.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      #{shipment.id.toString().padStart(6, '0')}
+                      {shipment.ref_code || `#${shipment.id.toString().padStart(6, '0')}`}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-sm font-medium text-gray-900">
@@ -561,7 +602,9 @@ export function ShipmentList() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {shipment.destination_address}
+                      {shipment.destination_address && shipment.destination_address.length > 30
+                        ? `${shipment.destination_address.substring(0, 30)}...`
+                        : shipment.destination_address}
                     </td>
                     {user.role === 'admin' && (
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -683,7 +726,7 @@ export function ShipmentList() {
           <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
               <h2 className="text-xl font-bold text-gray-800">
-                Detalles del Envío #{modalData.id.toString().padStart(6, '0')}
+                Detalles del Envío {modalData.ref_code || `#${modalData.id.toString().padStart(6, '0')}`}
               </h2>
               <div className="flex gap-2">
                 {((user.role === 'admin' && canEdit(modalData)) ||
@@ -785,27 +828,58 @@ export function ShipmentList() {
                 <div>
                   <h3 className="font-semibold mb-2">Dirección Origen</h3>
                   {isEditing ? (
-                    <input
-                      type="text"
-                      value={editData.origin_address}
-                      onChange={(e) => handleEditChange('origin_address', e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={editData.origin_address}
+                        onChange={(e) => handleEditChange('origin_address', e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        readOnly
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowOriginMap(true)}
+                        className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      >
+                        <MapPin className="w-5 h-5" />
+                      </button>
+                    </div>
                   ) : (
                     <p>{modalData.origin_address}</p>
                   )}
+                  {editData?.origin_lat && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      Coordenadas: {Number(editData.origin_lat).toFixed(6)}, {Number(editData.origin_lng).toFixed(6)}
+                    </p>
+                  )}
                 </div>
+
                 <div>
                   <h3 className="font-semibold mb-2">Dirección Destino</h3>
                   {isEditing ? (
-                    <input
-                      type="text"
-                      value={editData.destination_address}
-                      onChange={(e) => handleEditChange('destination_address', e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={editData.destination_address}
+                        onChange={(e) => handleEditChange('destination_address', e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        readOnly
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowDestinationMap(true)}
+                        className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      >
+                        <MapPin className="w-5 h-5" />
+                      </button>
+                    </div>
                   ) : (
                     <p>{modalData.destination_address}</p>
+                  )}
+                  {editData?.destination_lat && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      Coordenadas: {parseFloat(editData.destination_lat).toFixed(6)}, {parseFloat(editData.destination_lng).toFixed(6)}
+                    </p>
                   )}
                 </div>
 
@@ -972,7 +1046,7 @@ export function ShipmentList() {
                                   step="0.01"
                                 />
                               ) : (
-                                `$${item.value}`
+                                `${item.value}`
                               )}
                             </td>
                           )}
@@ -988,6 +1062,19 @@ export function ShipmentList() {
                           )}
                         </tr>
                       ))}
+                      {/* Fila de Total */}
+                      <tr className="font-semibold border-t">
+                        <td colSpan="2" className="px-4 py-2 text-right">Total:</td>
+                        <td className="px-4 py-2 text-right">
+                          {(isEditing ? editData.items : modalData.items).reduce((total, item) => total + (parseFloat(item.weight) * parseFloat(item.quantity)), 0).toFixed(2)} kg
+                        </td>
+                        {user.role === 'admin' && (
+                          <td className="px-4 py-2 text-right">
+                            ${(isEditing ? editData.items : modalData.items).reduce((total, item) => total + (parseFloat(item.value) * parseFloat(item.quantity)), 0).toFixed(2)}
+                          </td>
+                        )}
+                        {isEditing && user.role === 'admin' && canEdit(modalData) && <td></td>}
+                      </tr>
                     </tbody>
                   </table>
                 </div>
@@ -1003,6 +1090,33 @@ export function ShipmentList() {
           shipment={invoiceData}
           onClose={() => setInvoiceData(null)}
         />
+      )}
+
+      {/* Modales de Mapa */}
+      {isEditing && (
+        <>
+          <SimpleMapModal
+            isOpen={showOriginMap}
+            onClose={() => setShowOriginMap(false)}
+            onSelectLocation={handleSelectOriginLocation}
+            initialAddress={{
+              address: editData.origin_address,
+              lat: editData.origin_lat || null,
+              lng: editData.origin_lng || null
+            }}
+          />
+
+          <SimpleMapModal
+            isOpen={showDestinationMap}
+            onClose={() => setShowDestinationMap(false)}
+            onSelectLocation={handleSelectDestinationLocation}
+            initialAddress={{
+              address: editData.destination_address,
+              lat: editData.destination_lat || null,
+              lng: editData.destination_lng || null
+            }}
+          />
+        </>
       )}
     </div>
   );

@@ -1,13 +1,150 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, Plus, Package, Trash2, MapPin } from 'lucide-react';
+import { X, Plus, Package, Trash2, MapPin, Search, Building2 } from 'lucide-react';
 import { useShipments } from '../contexts/ShipmentsContext';
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
 import SimpleMapModal from './SimpleMapModal';
 
-// Importaciones de Leaflet
+// Componente de búsqueda de clientes con autocompletado
+const ClientSearch = ({ value, onChange, onCreateNew }) => {
+  const [query, setQuery] = useState('');
+  const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const wrapperRef = useRef(null);
+
+  // Inicializar la consulta con el valor actual si existe
+  useEffect(() => {
+    if (value) {
+      setQuery(typeof value === 'string' ? value : (value.business_name || value.name || ''));
+    }
+  }, [value]);
+
+  // Cargar clientes basados en la consulta
+  useEffect(() => {
+    const fetchClients = async () => {
+      if (!query.trim() || query.length < 2) {
+        setClients([]);
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const response = await api.get(`/clients?search=${encodeURIComponent(query)}`);
+        if (response && response.data) {
+          setClients(Array.isArray(response.data) ? response.data : []);
+        } else {
+          setClients([]);
+        }
+      } catch (error) {
+        console.error('Error al buscar clientes:', error);
+        setClients([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const timeoutId = setTimeout(fetchClients, 300);
+    return () => clearTimeout(timeoutId);
+  }, [query]);
+
+  // Manejar clics fuera del componente para cerrar resultados
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setShowResults(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [wrapperRef]);
+
+  return (
+    <div className="relative" ref={wrapperRef}>
+      <div className="relative">
+        <input
+          type="text"
+          className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Buscar cliente..."
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setShowResults(true);
+            // Si el usuario está escribiendo, actualizar el valor como texto
+            onChange(e.target.value);
+          }}
+          onFocus={() => setShowResults(true)}
+        />
+        {query && (
+          <button
+            type="button"
+            className="absolute right-10 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            onClick={() => {
+              setQuery('');
+              onChange('');
+            }}
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+          <Search className="w-5 h-5" />
+        </div>
+      </div>
+
+      {showResults && (
+        <div className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {loading ? (
+            <div className="p-4 text-center text-gray-500">Buscando clientes...</div>
+          ) : clients.length > 0 ? (
+            <ul>
+              {clients.map((client) => (
+                <li
+                  key={client.id}
+                  className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                  onClick={() => {
+                    setQuery(client.business_name || client.name);
+                    onChange(client);
+                    setShowResults(false);
+                  }}
+                >
+                  <div className="font-medium">{client.business_name || client.name}</div>
+                  {client.tax_id && <div className="text-xs text-gray-500">{client.tax_id}</div>}
+                </li>
+              ))}
+            </ul>
+          ) : query.length >= 2 ? (
+            <div className="p-4">
+              <p className="text-sm text-gray-500 mb-2">No se encontraron resultados para "{query}"</p>
+              <button
+                type="button"
+                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                onClick={() => {
+                  onCreateNew(query);
+                  setShowResults(false);
+                }}
+              >
+                <Plus className="w-4 h-4" />
+                Crear nuevo cliente
+              </button>
+            </div>
+          ) : (
+            <div className="p-4 text-center text-gray-500">
+              Escribe al menos 2 caracteres para buscar
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Importaciones de Leaflet y configuración del icono
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -75,192 +212,6 @@ function LocationMarker({ position, setPosition }) {
     <Marker position={position} />
   );
 }
-
-// Componente para el mapa
-const MapComponent = ({ initialLocation, onSelectLocation }) => {
-  const [position, setPosition] = useState(initialLocation || { lat: 25.761681, lng: -80.191788 });
-  const [address, setAddress] = useState('');
-  const searchInputRef = React.useRef(null);
-  const mapRef = React.useRef(null);
-  const geocodeServiceRef = React.useRef(null);
-
-  useEffect(() => {
-    if (!mapRef.current) return;
-
-    // Inicializar el servicio de geocodificación
-    geocodeServiceRef.current = ELG.geocodeService({
-      apikey: 'AAPK5513ccc3de4c4c02ae4aca2ebe6a91e0XXIyF0JKtQy5pFXnkKdNAcvb3QEeuxktxO1EfUKkBcVLo5bLwL-LFqGY2a5KUm5'
-    });
-
-    // Si se pasa una ubicación inicial, establecer la dirección
-    if (initialLocation && initialLocation.lat && initialLocation.lng) {
-      reverseGeocode(initialLocation);
-    }
-  }, [initialLocation]);
-
-  // Función para geocodificar una dirección
-  const geocodeAddress = async () => {
-    if (!address || !geocodeServiceRef.current || !mapRef.current) return;
-
-    try {
-      geocodeServiceRef.current.geocode().text(address).run((err, results) => {
-        if (err) {
-          console.error("Error geocodificando la dirección:", err);
-          return;
-        }
-
-        if (results.results && results.results.length > 0) {
-          const { lat, lng } = results.results[0].latlng;
-          setPosition({ lat, lng });
-          mapRef.current.flyTo([lat, lng], 15);
-        } else {
-          console.warn("No se encontraron resultados para la dirección");
-        }
-      });
-    } catch (error) {
-      console.error("Error en la geocodificación:", error);
-    }
-  };
-
-  // Función para geocodificación inversa (coordenadas a dirección)
-  const reverseGeocode = (latlng) => {
-    if (!geocodeServiceRef.current) return;
-
-    try {
-      geocodeServiceRef.current.reverse().latlng(latlng).run((error, result) => {
-        if (error) {
-          console.error("Error en geocodificación inversa:", error);
-          return;
-        }
-
-        if (result && result.address) {
-          const fullAddress = [
-            result.address.Address,
-            result.address.City,
-            result.address.Region,
-            result.address.Postal,
-            result.address.CountryCode
-          ].filter(Boolean).join(', ');
-
-          setAddress(fullAddress);
-        }
-      });
-    } catch (error) {
-      console.error("Error en la geocodificación inversa:", error);
-    }
-  };
-
-  // Cuando cambia la posición, hacer geocodificación inversa
-  useEffect(() => {
-    if (position && position.lat && position.lng) {
-      reverseGeocode(position);
-    }
-  }, [position]);
-
-  // Manejar la selección de ubicación
-  const handleSelectLocation = () => {
-    if (position && address) {
-      onSelectLocation({
-        lat: position.lat,
-        lng: position.lng,
-        address: address
-      });
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex gap-2">
-        <input
-          ref={searchInputRef}
-          type="text"
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="Ingresar dirección"
-        />
-        <button
-          onClick={geocodeAddress}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          Buscar
-        </button>
-      </div>
-
-      <div className="h-64 border rounded-lg overflow-hidden">
-        <MapContainer
-          center={[position.lat, position.lng]}
-          zoom={13}
-          style={{ height: '100%', width: '100%' }}
-          whenCreated={mapInstance => {
-            mapRef.current = mapInstance;
-          }}
-        >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          <LocationMarker position={position} setPosition={setPosition} />
-        </MapContainer>
-      </div>
-
-      <div className="text-sm text-gray-600">
-        <p><strong>Latitud:</strong> {position.lat.toFixed(6)}</p>
-        <p><strong>Longitud:</strong> {position.lng.toFixed(6)}</p>
-        <p><strong>Dirección:</strong> {address || 'No disponible'}</p>
-      </div>
-
-      <div className="flex justify-end">
-        <button
-          onClick={handleSelectLocation}
-          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-        >
-          Confirmar ubicación
-        </button>
-      </div>
-    </div>
-  );
-};
-
-/* Modal de selección de mapa
-const MapSelectModal = ({ isOpen, onClose, onSelectLocation, initialAddress = "" }) => {
-  if (!isOpen) return null;
-
-  // Convertir initialAddress a coordenadas iniciales si es necesario
-  const initialLocation = initialAddress 
-    ? null  // El componente MapComponent utilizará una ubicación predeterminada
-    : { lat: 25.761681, lng: -80.191788 }; // Default a Miami
-
-  const handleSelectLocation = (location) => {
-    onSelectLocation(location);
-    onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl overflow-hidden">
-        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-800">Seleccionar ubicación</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        <div className="p-6">
-          <MapComponent 
-            initialLocation={initialLocation}
-            onSelectLocation={handleSelectLocation}
-          />
-        </div>
-      </div>
-    </div>
-  );
-};
-*/
-
 const ItemForm = ({ onAdd, className = '' }) => {
   const [item, setItem] = useState(INITIAL_ITEM);
   const [error, setError] = useState('');
@@ -470,10 +421,39 @@ export function CreateShipment({ onClose }) {
   const [transportistas, setTransportistas] = useState([]);
   const [loadingTransportistas, setLoadingTransportistas] = useState(true);
   const [showError, setShowError] = useState(false);
+  const [selectedClient, setSelectedClient] = useState(null);
 
   // Map selection state
   const [showOriginMap, setShowOriginMap] = useState(false);
   const [showDestinationMap, setShowDestinationMap] = useState(false);
+
+  // Manejo de selección de cliente
+  const handleSelectClient = (client) => {
+    if (typeof client === 'object' && client !== null) {
+      setSelectedClient(client);
+      setShipment(prev => ({
+        ...prev,
+        cliente: client.business_name || client.name,
+        clientId: client.id
+      }));
+    } else {
+      // Si es solo texto, actualizar el nombre del cliente
+      setShipment(prev => ({
+        ...prev,
+        cliente: client
+      }));
+    }
+  };
+
+  const handleCreateNewClient = (name) => {
+    // Navegar a la página de creación de cliente y volver después
+    navigate('/logistica/clientes/nuevo', {
+      state: {
+        initialName: name,
+        returnPath: '/logistica/crear-envio'
+      }
+    });
+  };
 
   // Manejo de servicios como items
   useEffect(() => {
@@ -580,6 +560,7 @@ export function CreateShipment({ onClose }) {
               displayName: `${transportista.firstname} ${transportista.lastname} (${enviosPendientes} envíos pendientes)`,
             };
           });
+
         setTransportistas(transportistasData);
       } catch (error) {
         console.error('Error al cargar transportistas:', error);
@@ -648,8 +629,8 @@ export function CreateShipment({ onClose }) {
     setShipment((prev) => ({
       ...prev,
       direccionOrigen: location.address,
-      latitudOrigen: location.lat,
-      longitudOrigen: location.lng,
+      latitudOrigen: String(location.lat),
+      longitudOrigen: String(location.lng),
     }));
   }, []);
 
@@ -657,8 +638,8 @@ export function CreateShipment({ onClose }) {
     setShipment((prev) => ({
       ...prev,
       direccionDestino: location.address,
-      latitudDestino: location.lat,
-      longitudDestino: location.lng,
+      latitudDestino: String(location.lat),
+      longitudDestino: String(location.lng),
     }));
   }, []);
 
@@ -738,6 +719,11 @@ export function CreateShipment({ onClose }) {
       formData.append('appointment', shipment.appointment);
       formData.append('pallet_jack', shipment.palletJack);
       formData.append('comments', shipment.comments);
+
+      // Si hay un cliente seleccionado, incluir su ID
+      if (selectedClient && selectedClient.id) {
+        formData.append('client_id', selectedClient.id);
+      }
 
       // Transformar items para el backend
       const itemsForBackend = shipment.items.map(item => ({
@@ -845,13 +831,10 @@ export function CreateShipment({ onClose }) {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Cliente
                   </label>
-                  <input
-                    type="text"
-                    name="cliente"
-                    value={shipment.cliente}
-                    onChange={handleChange}
-                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.cliente ? 'border-red-500' : ''
-                      }`}
+                  <ClientSearch
+                    value={selectedClient || shipment.cliente}
+                    onChange={handleSelectClient}
+                    onCreateNew={handleCreateNewClient}
                   />
                   {errors.cliente && (
                     <p className="mt-1 text-sm text-red-500">{errors.cliente}</p>
@@ -942,7 +925,7 @@ export function CreateShipment({ onClose }) {
                   )}
                   {shipment.latitudOrigen && shipment.longitudOrigen && (
                     <p className="mt-1 text-xs text-gray-500">
-                      Coordenadas: {shipment.latitudOrigen.toFixed(6)}, {shipment.longitudOrigen.toFixed(6)}
+                      Coordenadas: {Number(shipment.latitudOrigen).toFixed(6)}, {Number(shipment.longitudOrigen).toFixed(6)}
                     </p>
                   )}
                 </div>
@@ -975,7 +958,7 @@ export function CreateShipment({ onClose }) {
                   )}
                   {shipment.latitudDestino && shipment.longitudDestino && (
                     <p className="mt-1 text-xs text-gray-500">
-                      Coordenadas: {shipment.latitudDestino.toFixed(6)}, {shipment.longitudDestino.toFixed(6)}
+                      Coordenadas: {Number(shipment.latitudDestino).toFixed(6)}, {Number(shipment.longitudDestino).toFixed(6)}
                     </p>
                   )}
                 </div>
