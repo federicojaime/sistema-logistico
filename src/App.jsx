@@ -1,27 +1,102 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { NavBar } from './components/NavBar';
+import React from 'react';
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate
+} from 'react-router-dom';
+
+// Componentes
+import { Login } from './components/Login';
 import { ShipmentList } from './components/ShipmentList';
 import { CreateShipment } from './components/CreateShipment';
+import { UserManagement } from './components/UserManagement';
 import { Invoices } from './components/Invoices';
-import { QuickBooksSetup } from './components/QuickBooksSetup';
+import { NavBar } from './components/NavBar';
+import { ClientList } from './components/ClientList';
+
+// Contextos
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ShipmentsProvider } from './contexts/ShipmentsContext';
+
+// Ruta privada
+const PrivateRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <div>Cargando...</div>;
+  }
+
+  if (!user) {
+    return <Navigate to="/logistica/login" replace />;
+  }
+
+  return (
+    <>
+      <NavBar />
+      <ShipmentsProvider>
+        {children}
+      </ShipmentsProvider>
+    </>
+  );
+};
+
+const AppRoutes = () => {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/logistica/login" element={<Login />} />
+        <Route
+          path="/logistica/home"
+          element={
+            <PrivateRoute>
+              <ShipmentList />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/logistica/clientes"
+          element={
+            <PrivateRoute>
+              <ClientList />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/logistica/crear-envio"
+          element={
+            <PrivateRoute>
+              <CreateShipment />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/logistica/usuarios"
+          element={
+            <PrivateRoute>
+              <UserManagement />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/logistica/facturas"
+          element={
+            <PrivateRoute>
+              <Invoices />
+            </PrivateRoute>
+          }
+        />
+        <Route path="/logistica" element={<Navigate to="/logistica/home" replace />} />
+        <Route path="/" element={<Navigate to="/logistica/home" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
+};
 
 export default function App() {
   return (
-    <ShipmentsProvider>
-      <Router basename="/logistica/">
-        <div className="min-h-screen bg-gray-50">
-          <NavBar />
-          <main className="container mx-auto px-4 py-8">
-            <Routes>
-              <Route path="/" element={<ShipmentList />} />
-              <Route path="/crear-envio" element={<CreateShipment />} />
-              <Route path="/facturas" element={<Invoices />} />
-              <Route path="/quickbooks/callback" element={<QuickBooksSetup />} />
-            </Routes>
-          </main>
-        </div>
-      </Router>
-    </ShipmentsProvider>
+    <AuthProvider>
+      <AppRoutes />
+    </AuthProvider>
   );
 }

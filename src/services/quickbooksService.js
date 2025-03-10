@@ -28,7 +28,7 @@ export default class QuickBooksService {
             const response = await fetch(this.phpBackendUrl, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
                     qbEndpoint: endpoint,
@@ -131,9 +131,7 @@ export default class QuickBooksService {
             const response = await fetch(this.phpBackendUrl, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    // Agregar headers CORS explícitos
-                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
                 },
                 credentials: 'include', // Importante para CORS
                 body: JSON.stringify({

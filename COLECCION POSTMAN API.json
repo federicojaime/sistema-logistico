@@ -1,0 +1,474 @@
+{
+	"info": {
+		"_postman_id": "unique-id-here",
+		"name": "API ALS Logistics",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Autenticación",
+			"item": [
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"admin@example.com\",\n    \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["login"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Usuarios",
+			"item": [
+				{
+					"name": "Listar Usuarios",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/users",
+							"host": ["{{baseUrl}}"],
+							"path": ["users"]
+						}
+					}
+				},
+				{
+					"name": "Obtener Usuario",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/user/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["user", "1"]
+						}
+					}
+				},
+				{
+					"name": "Crear Usuario",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"conductor@example.com\",\n    \"firstname\": \"Juan\",\n    \"lastname\": \"Pérez\",\n    \"password\": \"conductor123\",\n    \"role\": \"transportista\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/user",
+							"host": ["{{baseUrl}}"],
+							"path": ["user"]
+						}
+					}
+				},
+				{
+					"name": "Actualizar Usuario",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"firstname\": \"Juan\",\n    \"lastname\": \"Pérez\",\n    \"role\": \"transportista\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/user/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["user", "1"]
+						}
+					}
+				},
+				{
+					"name": "Eliminar Usuario",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/user/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["user", "1"]
+						}
+					}
+				},
+				{
+					"name": "Cambiar Contraseña",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"current_password\": \"oldpass123\",\n    \"new_password\": \"newpass123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/user/1/password",
+							"host": ["{{baseUrl}}"],
+							"path": ["user", "1", "password"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Envíos",
+			"item": [
+				{
+					"name": "Listar Envíos",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/shipments",
+							"host": ["{{baseUrl}}"],
+							"path": ["shipments"],
+							"query": [
+								{
+									"key": "status",
+									"value": "pendiente",
+									"disabled": true
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Obtener Envío",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/shipment/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["shipment", "1"]
+						}
+					}
+				},
+				{
+					"name": "Crear Envío",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"customer\": \"Cliente Demo\",\n    \"origin_address\": \"Origen 123\",\n    \"destination_address\": \"Destino 456\",\n    \"shipping_cost\": 100.50,\n    \"driver_id\": 1,\n    \"items\": [\n        {\n            \"description\": \"Item 1\",\n            \"quantity\": 2,\n            \"weight\": 10.5,\n            \"value\": 50.25\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/shipment",
+							"host": ["{{baseUrl}}"],
+							"path": ["shipment"]
+						}
+					}
+				},
+				{
+					"name": "Actualizar Estado Envío",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"en_transito\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/shipment/1/status",
+							"host": ["{{baseUrl}}"],
+							"path": ["shipment", "1", "status"]
+						}
+					}
+				},
+				{
+					"name": "Subir POD",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "pod",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/shipment/1/pod",
+							"host": ["{{baseUrl}}"],
+							"path": ["shipment", "1", "pod"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Facturas",
+			"item": [
+				{
+					"name": "Listar Facturas",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/invoices",
+							"host": ["{{baseUrl}}"],
+							"path": ["invoices"]
+						}
+					}
+				},
+				{
+					"name": "Obtener Factura",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/invoice/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["invoice", "1"]
+						}
+					}
+				},
+				{
+					"name": "Crear Factura",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"customer\": \"Cliente Demo\",\n    \"customer_email\": \"cliente@demo.com\",\n    \"issue_date\": \"2024-02-23\",\n    \"due_date\": \"2024-03-23\",\n    \"items\": [\n        {\n            \"description\": \"Servicio 1\",\n            \"quantity\": 2,\n            \"unit_price\": 100.50\n        }\n    ],\n    \"shipment_id\": 1\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/invoice",
+							"host": ["{{baseUrl}}"],
+							"path": ["invoice"]
+						}
+					}
+				},
+				{
+					"name": "Actualizar Estado Factura",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"pagada\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/invoice/1/status",
+							"host": ["{{baseUrl}}"],
+							"path": ["invoice", "1", "status"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "QuickBooks",
+			"item": [
+				{
+					"name": "Estado de Conexión",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/quickbooks/status",
+							"host": ["{{baseUrl}}"],
+							"path": ["quickbooks", "status"]
+						}
+					}
+				},
+				{
+					"name": "Callback OAuth",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"code\": \"authorization_code\",\n    \"realmId\": \"company_id\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/quickbooks/callback",
+							"host": ["{{baseUrl}}"],
+							"path": ["quickbooks", "callback"]
+						}
+					}
+				},
+				{
+					"name": "Sincronizar Factura",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"quickbooks_id\": \"QB-123456\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/invoice/1/quickbooks",
+							"host": ["{{baseUrl}}"],
+							"path": ["invoice", "1", "quickbooks"]
+						}
+					}
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [""]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [""]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost/api-als",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
