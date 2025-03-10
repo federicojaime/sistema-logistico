@@ -14,6 +14,7 @@ import { UserManagement } from './components/UserManagement';
 import { Invoices } from './components/Invoices';
 import { NavBar } from './components/NavBar';
 import { ClientList } from './components/ClientList';
+import { AccountantShipmentList } from './components/AccountantShipmentList';
 
 // Contextos
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -63,6 +64,14 @@ const AppRoutes = () => {
           element={
             <PrivateRoute allowedRoles={['admin', 'transportista']}>
               <ShipmentList />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/logistica/envios-finalizados"
+          element={
+            <PrivateRoute allowedRoles={['contable']}>
+              <AccountantShipmentList />
             </PrivateRoute>
           }
         />

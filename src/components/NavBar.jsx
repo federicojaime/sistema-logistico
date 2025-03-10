@@ -28,14 +28,16 @@ export function NavBar() {
               </Link>
             )}
 
-            {/* Mostrar enlace a Facturas para todos los roles */}
-            <Link
-              to="/logistica/facturas"
-              className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
-            >
-              Facturas
-            </Link>
-
+            {user.role === 'contable' && (
+              <>
+                <Link
+                  to={user.role === 'contable' ? '/logistica/envios-finalizados' : '/logistica/facturas'}
+                  className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+                >
+                  {user.role === 'contable' ? 'Envíos Finalizados' : 'Facturas'}
+                </Link>
+              </>
+            )}
             {user.role === 'admin' && (
               <>
                 {/* Agregar enlace a Clientes - visible solo para administradores */}
