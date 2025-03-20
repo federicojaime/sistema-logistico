@@ -7,8 +7,8 @@ import fondo from '../assets/fondo.jpg';
 import { Alert, AlertTitle, AlertDescription } from './ui/alert';
 
 export function Login() {
-  const [email, setEmail] = useState('federicojq@gmail.com');
-  const [password, setPassword] = useState('federico123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();

@@ -570,9 +570,9 @@ export function ClientList() {
     }
 
     return (
-        <div className="container mx-auto py-8 px-4">
+        <div className="container mx-auto py-6 px-4">
             {/* Header y Controles */}
-            <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+            <div className="flex flex-col md:flex-row justify-between items-center mb-5 gap-3">
                 <h2 className="text-2xl font-bold text-gray-800">Lista de Clientes</h2>
 
                 <button
@@ -600,8 +600,8 @@ export function ClientList() {
             )}
 
             {/* Filtros */}
-            <div className="mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="relative">
+            <div className="mb-5 grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div className="relative col-span-2">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                     <input
                         type="text"
@@ -644,25 +644,25 @@ export function ClientList() {
             ) : (
                 <div className="bg-white rounded-lg shadow overflow-hidden">
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
+                        <table className="w-full table-fixed divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase w-1/4">
                                         Razón Social
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase w-1/6">
                                         CUIT/NIT
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase w-1/5">
                                         Email
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase w-1/6">
                                         Teléfono
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase w-1/12">
                                         Estado
                                     </th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase w-1/8">
                                         Acciones
                                     </th>
                                 </tr>
@@ -670,53 +670,53 @@ export function ClientList() {
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {filteredClients.map((client) => (
                                     <tr key={client.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 whitespace-nowrap">
+                                        <td className="px-3 py-2 truncate">
                                             <span className="text-sm font-medium text-gray-900">
                                                 {client.business_name}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <td className="px-3 py-2 text-sm text-gray-500 truncate">
                                             {client.tax_id}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <td className="px-3 py-2 text-sm text-gray-500 truncate">
                                             {client.email}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <td className="px-3 py-2 text-sm text-gray-500 truncate">
                                             {client.phone}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                        ${client.status === 'active'
+                                        <td className="px-3 py-2 text-center">
+                                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium
+                                            ${client.status === 'active'
                                                     ? 'bg-green-100 text-green-800'
                                                     : 'bg-red-100 text-red-800'}`}
                                             >
                                                 {client.status === 'active' ? 'Activo' : 'Inactivo'}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <div className="flex justify-end items-center gap-2">
+                                        <td className="px-3 py-2 text-center">
+                                            <div className="flex justify-center items-center space-x-2">
                                                 <button
                                                     onClick={() => setModalData(client)}
-                                                    className="text-gray-400 hover:text-blue-600 transition-colors"
+                                                    className="text-gray-500 hover:text-blue-600 transition-colors p-1 rounded-full hover:bg-blue-50"
                                                     title="Ver detalles"
                                                 >
-                                                    <Eye className="w-5 h-5" />
+                                                    <Eye className="w-4 h-4" />
                                                 </button>
 
                                                 <button
                                                     onClick={() => setModalData(client)}
-                                                    className="text-gray-400 hover:text-blue-600 transition-colors"
+                                                    className="text-gray-500 hover:text-blue-600 transition-colors p-1 rounded-full hover:bg-blue-50"
                                                     title="Editar"
                                                 >
-                                                    <Edit className="w-5 h-5" />
+                                                    <Edit className="w-4 h-4" />
                                                 </button>
 
                                                 <button
                                                     onClick={() => handleDelete(client.id)}
-                                                    className="text-gray-400 hover:text-red-600 transition-colors"
+                                                    className="text-gray-500 hover:text-red-600 transition-colors p-1 rounded-full hover:bg-red-50"
                                                     title="Eliminar"
                                                 >
-                                                    <Trash2 className="w-5 h-5" />
+                                                    <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </div>
                                         </td>

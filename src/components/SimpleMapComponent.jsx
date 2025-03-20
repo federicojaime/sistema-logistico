@@ -35,14 +35,19 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
     lng: initialPos.lng || DEFAULT_LOCATION.lng
   };
 
+  const [searchText, setSearchText] = useState('');
   const [address, setAddress] = useState(initialPos.address || DEFAULT_LOCATION.address);
   const [position, setPosition] = useState(startPosition);
+  const [suggestions, setSuggestions] = useState([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const [typingTimeout, setTypingTimeout] = useState(null);
   
   const mapContainerId = `map-${Math.random().toString(36).substring(2, 11)}`;
   
   // Referencias para mapa y marcador
   const mapRef = useRef(null);
   const markerRef = useRef(null);
+  const searchInputRef = useRef(null);
 
   // Inicializar el mapa cuando el componente se monta
   useEffect(() => {
@@ -109,6 +114,7 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
         
         if (data && data.display_name) {
           setAddress(data.display_name);
+          setSearchText(data.display_name);
         }
       } catch (error) {
         console.error("Error en geocodificación inversa:", error);
@@ -128,8 +134,77 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
     };
   }, [mapContainerId]); // Solo ejecutar cuando cambia el ID del contenedor
 
-  // Función de búsqueda de dirección
-  const geocodeAddress = async (searchText) => {
+  // Función para buscar sugerencias mientras se escribe
+  const searchSuggestions = async (text) => {
+    if (!text || text.trim().length < 3) {
+      setSuggestions([]);
+      return;
+    }
+    
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(text)}&limit=5`,
+        { 
+          headers: { 
+            'Accept-Language': 'es',
+            'User-Agent': 'ALS-Logistica/1.0'
+          } 
+        }
+      );
+      const data = await response.json();
+      
+      if (data && data.length > 0) {
+        setSuggestions(data);
+      } else {
+        setSuggestions([]);
+      }
+    } catch (error) {
+      console.error("Error buscando sugerencias:", error);
+      setSuggestions([]);
+    }
+  };
+
+  // Manejar cambios en el campo de búsqueda
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchText(value);
+    setIsTyping(true);
+    
+    // Limpiar el timeout anterior si existe
+    if (typingTimeout) {
+      clearTimeout(typingTimeout);
+    }
+    
+    // Configurar un nuevo timeout
+    const timeout = setTimeout(() => {
+      setIsTyping(false);
+      searchSuggestions(value);
+    }, 500); // Esperar 500ms después de que el usuario deje de escribir
+    
+    setTypingTimeout(timeout);
+  };
+
+  // Función para seleccionar una sugerencia
+  const selectSuggestion = (suggestion) => {
+    const newPos = { 
+      lat: parseFloat(suggestion.lat), 
+      lng: parseFloat(suggestion.lon) 
+    };
+    
+    setPosition(newPos);
+    setSearchText(suggestion.display_name);
+    setAddress(suggestion.display_name);
+    setSuggestions([]);
+    
+    // Actualizar el mapa y el marcador
+    if (mapRef.current && markerRef.current) {
+      markerRef.current.setLatLng([newPos.lat, newPos.lng]);
+      mapRef.current.flyTo([newPos.lat, newPos.lng], 15);
+    }
+  };
+
+  // Función de búsqueda de dirección con el botón
+  const geocodeAddress = async () => {
     if (!searchText || !searchText.trim() || !mapRef.current) return;
     
     try {
@@ -159,6 +234,8 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
         
         // Actualizar dirección
         setAddress(result.display_name);
+        setSearchText(result.display_name);
+        setSuggestions([]);
       } else {
         alert("No se encontraron resultados para esta dirección");
       }
@@ -180,21 +257,45 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex gap-2">
-        <input
-          type="text"
-          className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="Ingresar dirección"
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-        />
-        <button
-          type="button" // Añadido para evitar envío de formulario
-          onClick={() => geocodeAddress(address)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          Buscar
-        </button>
+      <div className="relative">
+        <div className="flex gap-2">
+          <input
+            ref={searchInputRef}
+            type="text"
+            className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Ingresar dirección"
+            value={searchText}
+            onChange={handleSearchChange}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                geocodeAddress();
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={geocodeAddress}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Buscar
+          </button>
+        </div>
+        
+        {/* Lista de sugerencias */}
+        {suggestions.length > 0 && (
+          <ul className="absolute z-10 w-full bg-white mt-1 border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+            {suggestions.map((suggestion, index) => (
+              <li 
+                key={`${suggestion.place_id}-${index}`}
+                className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm border-b last:border-b-0"
+                onClick={() => selectSuggestion(suggestion)}
+              >
+                {suggestion.display_name}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div 
@@ -212,7 +313,7 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
 
       <div className="flex justify-end">
         <button
-          type="button" // Añadido para evitar envío de formulario
+          type="button"
           onClick={handleSelectLocation}
           className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
         >
