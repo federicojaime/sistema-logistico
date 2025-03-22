@@ -135,7 +135,7 @@ export function ShipmentList() {
         const usersResponse = await api.get('/users');
         const usersData = usersResponse?.data || [];
 
-        const transportistasData = usersData
+        let transportistasData = usersData
           .filter((user) => user.role === 'transportista')
           .map((transportista) => {
             const enviosPendientes = envios.filter(
@@ -152,6 +152,19 @@ export function ShipmentList() {
             };
           });
 
+        // Ordenar transportistas por cantidad de envíos pendientes (de menor a mayor)
+        transportistasData = transportistasData.sort((a, b) =>
+          a.enviosPendientes - b.enviosPendientes
+        );
+
+        // Añadir la opción "Sin Transportista" al principio de la lista
+        transportistasData.unshift({
+          id: 99999,
+          enviosPendientes: 0,
+          name: "Sin Transportista",
+          displayName: "Sin Transportista (0 envíos pendientes)",
+        });
+
         setTransportistas(transportistasData);
       } catch (error) {
         console.error('Error al cargar transportistas:', error);
@@ -162,7 +175,6 @@ export function ShipmentList() {
 
     cargarTransportistas();
   }, [user.role]);
-
   // Inicializar datos de edición cuando se abre el modal
   useEffect(() => {
     if (modalData && !editData) {

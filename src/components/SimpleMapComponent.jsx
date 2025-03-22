@@ -18,331 +18,212 @@ let DefaultIcon = L.icon({
 
 L.Marker.prototype.options.icon = DefaultIcon;
 
-// Coordenadas por defecto para Miami, FL - usadas solo si no hay ubicación inicial
-const DEFAULT_LOCATION = { 
-  lat: 25.761681, 
-  lng: -80.191788,
-  address: "Miami, Florida, United States"
-};
-
-// Ejemplos de ubicaciones predefinidas para búsqueda rápida
-// Esto sirve como fallback cuando la API de búsqueda no responde
-const FALLBACK_LOCATIONS = [
-  { 
-    display_name: "San Luis, Argentina", 
-    lat: -33.295555, 
-    lon: -66.338022
-  },
-  { 
-    display_name: "San Luis Potosí, México", 
-    lat: 22.156469, 
-    lon: -100.985662
-  },
-  { 
-    display_name: "San Luis Obispo, California, Estados Unidos", 
-    lat: 35.282752, 
-    lon: -120.659616
-  },
-  { 
-    display_name: "Miami, Florida, Estados Unidos", 
-    lat: 25.761681, 
-    lon: -80.191788
-  },
-  { 
-    display_name: "Nueva York, Estados Unidos", 
-    lat: 40.712776, 
-    lon: -74.005974
-  }
+// Lista de ubicaciones comunes para facilitar la búsqueda
+const COMMON_LOCATIONS = [
+  { name: "Miami, Florida, USA", lat: 25.761681, lng: -80.191788 },
+  { name: "New York, NY, USA", lat: 40.712776, lng: -74.005974 },
+  { name: "Los Angeles, CA, USA", lat: 34.052235, lng: -118.243683 },
+  { name: "Houston, TX, USA", lat: 29.760427, lng: -95.369803 },
+  { name: "Chicago, IL, USA", lat: 41.878113, lng: -87.629799 },
+  { name: "Miami Airport, FL, USA", lat: 25.795865, lng: -80.287046 },
+  { name: "Port Miami, FL, USA", lat: 25.774948, lng: -80.176567 },
+  { name: "Orlando, FL, USA", lat: 28.538336, lng: -81.379234 },
+  { name: "Tampa, FL, USA", lat: 27.950575, lng: -82.457178 },
+  { name: "Jacksonville, FL, USA", lat: 30.332184, lng: -81.655647 }
 ];
 
 const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
-  // Usar initialLocation si se proporciona, de lo contrario usar los valores por defecto
-  const initialPos = initialLocation || DEFAULT_LOCATION;
-  
-  // Si tenemos coordenadas de la ubicación inicial, priorizar esas
-  const startPosition = {
-    lat: initialPos.lat || DEFAULT_LOCATION.lat,
-    lng: initialPos.lng || DEFAULT_LOCATION.lng
+  // Coordenadas por defecto para Miami
+  const DEFAULT_LOCATION = { 
+    lat: 25.761681, 
+    lng: -80.191788,
+    address: "Miami, Florida, USA"
   };
 
+  // Configuración inicial con valores por defecto o proporcionados
+  const initialPos = initialLocation || DEFAULT_LOCATION;
+  
+  const [position, setPosition] = useState({
+    lat: initialPos.lat || DEFAULT_LOCATION.lat,
+    lng: initialPos.lng || DEFAULT_LOCATION.lng
+  });
+  const [address, setAddress] = useState(initialPos.address || '');
   const [searchText, setSearchText] = useState('');
-  const [address, setAddress] = useState(initialPos.address || DEFAULT_LOCATION.address);
-  const [position, setPosition] = useState(startPosition);
   const [suggestions, setSuggestions] = useState([]);
-  const [isDragging, setIsDragging] = useState(false);
-  const [searchError, setSearchError] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [error, setError] = useState('');
   
-  const mapContainerId = `map-${Math.random().toString(36).substring(2, 11)}`;
-  
-  // Referencias para mapa y marcador
   const mapRef = useRef(null);
   const markerRef = useRef(null);
-  const searchInputRef = useRef(null);
-
-  // Inicializar el mapa cuando el componente se monta
+  const mapContainerId = `map-${Date.now()}`;
+  
+  // Inicializar mapa
   useEffect(() => {
-    console.log("Initializing map with position:", startPosition);
-    
-    // Crear una instancia del mapa
-    const map = L.map(mapContainerId).setView(
-      [position.lat, position.lng], 
-      13
-    );
-    
-    // Guardar referencia al mapa
+    // Crear mapa
+    const map = L.map(mapContainerId).setView([position.lat, position.lng], 13);
     mapRef.current = map;
-
-    // Añadir el tile layer de OpenStreetMap
+    
+    // Añadir capa de tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
-
-    // Añadir un marcador inicial arrastrable
-    const marker = L.marker([position.lat, position.lng], {
-      draggable: true  // Hacer el marcador arrastrable
-    }).addTo(map);
     
+    // Añadir marcador
+    const marker = L.marker([position.lat, position.lng], { draggable: true }).addTo(map);
     markerRef.current = marker;
-
-    // Evento cuando comienza a arrastrar el marcador
-    marker.on('dragstart', function() {
-      setIsDragging(true);
-    });
-
-    // Evento cuando el marcador termina de arrastrarse
+    
+    // Manejar arrastre del marcador
     marker.on('dragend', function(e) {
-      const newPos = e.target.getLatLng();
-      const newPosition = { lat: newPos.lat, lng: newPos.lng };
-      setPosition(newPosition);
-      
-      // Geocodificar la nueva posición después de un pequeño retraso
-      setTimeout(() => {
-        reverseGeocode(newPosition);
-        setIsDragging(false);
-      }, 300);
+      const pos = e.target.getLatLng();
+      setPosition({ lat: pos.lat, lng: pos.lng });
+      reverseGeocode(pos.lat, pos.lng);
     });
-
-    // Manejar clics en el mapa
+    
+    // Manejar clic en el mapa
     map.on('click', function(e) {
-      const newPosition = { lat: e.latlng.lat, lng: e.latlng.lng };
-      setPosition(newPosition);
+      const { lat, lng } = e.latlng;
       
-      // Actualizar el marcador si existe
-      if (markerRef.current) {
-        markerRef.current.setLatLng(e.latlng);
-      }
-      
-      // Intentar geocodificar la posición
-      reverseGeocode(newPosition);
+      setPosition({ lat, lng });
+      marker.setLatLng([lat, lng]);
+      reverseGeocode(lat, lng);
     });
-
-    // Función sencilla de geocodificación inversa usando Nominatim
-    const reverseGeocode = async (pos) => {
+    
+    // Geocodificación inversa para obtener dirección a partir de coordenadas
+    const reverseGeocode = async (lat, lng) => {
       try {
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.lat}&lon=${pos.lng}&zoom=18&addressdetails=1`,
-          { 
-            headers: { 
-              'Accept-Language': 'es',
-              'User-Agent': 'ALS-Logistica/1.0'
-            } 
-          }
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=es`,
+          { headers: { 'User-Agent': 'ALS-Logistics-App' } }
         );
         
         if (!response.ok) {
-          throw new Error(`Error de red: ${response.status}`);
+          throw new Error('Error en geocodificación inversa');
         }
         
         const data = await response.json();
-        
         if (data && data.display_name) {
           setAddress(data.display_name);
-          if (!isDragging) {
-            setSearchText(data.display_name);
-          }
+        } else {
+          setAddress(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
         }
       } catch (error) {
-        console.error("Error en geocodificación inversa:", error);
-        // Mantenemos la dirección anterior en caso de error
+        console.error('Error:', error);
+        setAddress(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
       }
     };
-
-    // Geocodificar la posición inicial solo si no tenemos dirección
-    if (!initialPos.address && !initialPos.direccionOrigen && !initialPos.direccionDestino) {
-      reverseGeocode(position);
+    
+    // Intentar obtener dirección inicial si no está disponible
+    if (!address && initialPos) {
+      reverseGeocode(initialPos.lat, initialPos.lng);
     }
-
+    
     // Limpiar al desmontar
     return () => {
       map.remove();
-      mapRef.current = null;
-      markerRef.current = null;
     };
-  }, [mapContainerId]); // Solo ejecutar cuando cambia el ID del contenedor
+  }, []);
 
-  // Búsqueda en modo local (fallback)
-  const searchLocalSuggestions = (text) => {
-    if (!text || text.trim().length < 2) {
+  // Filtrar sugerencias basadas en el texto de búsqueda
+  const filterSuggestions = (text) => {
+    if (!text || text.length < 2) {
       setSuggestions([]);
+      setShowSuggestions(false);
       return;
     }
     
-    const query = text.toLowerCase();
-    const filteredLocations = FALLBACK_LOCATIONS.filter(location => 
-      location.display_name.toLowerCase().includes(query)
+    const filtered = COMMON_LOCATIONS.filter(location => 
+      location.name.toLowerCase().includes(text.toLowerCase())
     );
     
-    setSuggestions(filteredLocations);
-    setSearchError(false);
-  };
-
-  // Función para buscar sugerencias mientras se escribe
-  const searchSuggestions = async (text) => {
-    if (!text || text.trim().length < 2) {
-      setSuggestions([]);
-      return;
-    }
-    
-    // Primero mostramos resultados locales mientras esperamos la API
-    searchLocalSuggestions(text);
-    
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 segundos timeout
-      
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(text)}&limit=5`,
-        { 
-          headers: { 
-            'Accept-Language': 'es',
-            'User-Agent': 'ALS-Logistica/1.0'
-          },
-          signal: controller.signal
-        }
-      );
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        throw new Error(`Error de red: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      if (data && data.length > 0) {
-        setSuggestions(data);
-        setSearchError(false);
-      } else {
-        // Si no hay resultados, volvemos a los resultados locales
-        searchLocalSuggestions(text);
-      }
-    } catch (error) {
-      console.error("Error buscando sugerencias:", error);
-      // En caso de error, usar las ubicaciones predefinidas como fallback
-      searchLocalSuggestions(text);
-      setSearchError(true);
-    }
+    setSuggestions(filtered);
+    setShowSuggestions(filtered.length > 0);
   };
 
   // Manejar cambios en el campo de búsqueda
   const handleSearchChange = (e) => {
-    const value = e.target.value;
-    setSearchText(value);
-    
-    // Buscar después de un breve retraso para evitar demasiadas solicitudes
-    if (value.length >= 2) {
-      const delayDebounceFn = setTimeout(() => {
-        searchSuggestions(value);
-      }, 300);
-      
-      return () => clearTimeout(delayDebounceFn);
-    } else {
-      setSuggestions([]);
-    }
+    const text = e.target.value;
+    setSearchText(text);
+    filterSuggestions(text);
   };
 
-  // Función para seleccionar una sugerencia
-  const selectSuggestion = (suggestion) => {
-    const newPos = { 
-      lat: parseFloat(suggestion.lat), 
-      lng: parseFloat(suggestion.lon) 
-    };
+  // Seleccionar ubicación desde las sugerencias
+  const selectLocation = (location) => {
+    setPosition({ lat: location.lat, lng: location.lng });
+    setAddress(location.name);
+    setSearchText(location.name);
+    setShowSuggestions(false);
     
-    setPosition(newPos);
-    setSearchText(suggestion.display_name);
-    setAddress(suggestion.display_name);
-    setSuggestions([]);
-    
-    // Actualizar el mapa y el marcador
     if (mapRef.current && markerRef.current) {
-      markerRef.current.setLatLng([newPos.lat, newPos.lng]);
-      mapRef.current.flyTo([newPos.lat, newPos.lng], 15);
+      markerRef.current.setLatLng([location.lat, location.lng]);
+      mapRef.current.setView([location.lat, location.lng], 13);
     }
   };
 
-  // Función de búsqueda de dirección con el botón
-  const geocodeAddress = async () => {
-    if (!searchText || !searchText.trim() || !mapRef.current) return;
-
-    // Primero verificamos si coincide con alguna de nuestras ubicaciones predefinidas
-    const matchedLocation = FALLBACK_LOCATIONS.find(loc => 
-      loc.display_name.toLowerCase().includes(searchText.toLowerCase())
-    );
-    
-    if (matchedLocation) {
-      selectSuggestion(matchedLocation);
+  // Buscar dirección ingresada manualmente
+  const searchAddress = async () => {
+    if (!searchText || searchText.trim().length < 3) {
+      setError('Por favor ingrese una dirección más específica');
       return;
     }
     
+    setError('');
+    
+    // Primero buscar en ubicaciones comunes
+    const localMatch = COMMON_LOCATIONS.find(loc => 
+      loc.name.toLowerCase().includes(searchText.toLowerCase())
+    );
+    
+    if (localMatch) {
+      selectLocation(localMatch);
+      return;
+    }
+    
+    // Si no se encuentra localmente, usar la API de geocodificación
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchText)}&limit=1`,
-        { 
-          headers: { 
-            'Accept-Language': 'es',
-            'User-Agent': 'ALS-Logistica/1.0'
-          } 
-        }
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchText)}&limit=1&accept-language=es`,
+        { headers: { 'User-Agent': 'ALS-Logistics-App' } }
       );
       
       if (!response.ok) {
-        throw new Error(`Error de red: ${response.status}`);
+        throw new Error('Error en la búsqueda');
       }
       
       const data = await response.json();
       
       if (data && data.length > 0) {
         const result = data[0];
-        selectSuggestion(result);
+        const location = {
+          lat: parseFloat(result.lat),
+          lng: parseFloat(result.lon),
+          name: result.display_name
+        };
+        
+        selectLocation(location);
       } else {
-        // Si no hay resultados, mostrar mensaje
-        alert("No se encontraron resultados para esta dirección");
+        setError('No se encontraron resultados para esta dirección');
       }
     } catch (error) {
-      console.error("Error en geocodificación:", error);
-      
-      // Intentar buscar en las ubicaciones locales como fallback
-      const matchedLocation = FALLBACK_LOCATIONS.find(loc => 
-        loc.display_name.toLowerCase().includes(searchText.toLowerCase())
-      );
-      
-      if (matchedLocation) {
-        selectSuggestion(matchedLocation);
-      } else {
-        alert("Error al buscar la dirección. Por favor intente nuevamente.");
-      }
+      console.error('Error:', error);
+      setError('Error al buscar la dirección. Intente con otra o seleccione directamente en el mapa.');
     }
   };
 
-  // Manejar la selección de ubicación
-  const handleSelectLocation = () => {
-    if (position) {
-      onSelectLocation({
-        lat: position.lat,
-        lng: position.lng,
-        address: address || 'Ubicación sin dirección'
-      });
+  // Manejar tecla Enter en el campo de búsqueda
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      searchAddress();
     }
+  };
+
+  // Confirmar la ubicación seleccionada
+  const handleConfirmLocation = () => {
+    onSelectLocation({
+      lat: position.lat,
+      lng: position.lng,
+      address: address
+    });
   };
 
   return (
@@ -350,72 +231,74 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
       <div className="relative">
         <div className="flex gap-2">
           <input
-            ref={searchInputRef}
             type="text"
-            className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Ingresar dirección"
+            className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Buscar dirección (ej: Miami, Florida)..."
             value={searchText}
             onChange={handleSearchChange}
-            onFocus={() => {
-              if (searchText.trim().length >= 2) {
-                searchSuggestions(searchText);
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                geocodeAddress();
-              }
-            }}
-            autoComplete="off" // Deshabilitar el autocompletado del navegador
+            onKeyPress={handleKeyPress}
+            onFocus={() => filterSuggestions(searchText)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
           />
           <button
-            type="button"
-            onClick={geocodeAddress}
+            onClick={searchAddress}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             Buscar
           </button>
         </div>
         
-        {/* Lista de sugerencias */}
-        {suggestions.length > 0 && (
-          <ul className="absolute z-10 w-full bg-white mt-1 border rounded-lg shadow-lg max-h-60 overflow-y-auto">
-            {searchError && (
-              <li className="px-4 py-2 text-sm text-orange-700 bg-orange-50">
-                Usando resultados locales - API no disponible
-              </li>
-            )}
-            {suggestions.map((suggestion, index) => (
-              <li 
-                key={`suggestion-${index}`}
-                className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm border-b last:border-b-0"
-                onClick={() => selectSuggestion(suggestion)}
+        {error && (
+          <div className="text-red-500 text-sm mt-1">
+            {error}
+          </div>
+        )}
+        
+        {showSuggestions && suggestions.length > 0 && (
+          <div className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+            {suggestions.map((location, index) => (
+              <div 
+                key={index}
+                className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                onClick={() => selectLocation(location)}
               >
-                {suggestion.display_name}
-              </li>
+                {location.name}
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
-
-      <div 
-        id={mapContainerId} 
-        className="h-64 rounded-lg border"
-        style={{ height: '300px', width: '100%' }}
+      
+      <div
+        id={mapContainerId}
+        className="w-full rounded-lg border border-gray-300"
+        style={{ height: '300px' }}
       ></div>
-
-      <div className="mt-2 text-sm text-gray-600 mb-2">
-        <p className="text-xs text-gray-500 mb-2 italic">Para mover el marcador: haz clic en un punto del mapa o arrastra el pin a la ubicación deseada.</p>
-        <p><strong>Latitud:</strong> {Number(position.lat).toFixed(6)}</p>
-        <p><strong>Longitud:</strong> {Number(position.lng).toFixed(6)}</p>
-        <p><strong>Dirección:</strong> {address || 'No disponible'}</p>
+      
+      <div className="text-xs text-gray-500 italic">
+        Busca una dirección usando el campo de arriba o haz clic directamente en cualquier punto del mapa.
+      </div>
+      
+      <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm font-semibold">Latitud:</p>
+            <p className="text-sm">{position.lat.toFixed(6)}</p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold">Longitud:</p>
+            <p className="text-sm">{position.lng.toFixed(6)}</p>
+          </div>
+        </div>
+        <div className="mt-2">
+          <p className="text-sm font-semibold">Dirección:</p>
+          <p className="text-sm break-words">{address || 'No disponible'}</p>
+        </div>
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex justify-end mt-2">
         <button
-          type="button"
-          onClick={handleSelectLocation}
+          onClick={handleConfirmLocation}
           className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
         >
           Confirmar ubicación

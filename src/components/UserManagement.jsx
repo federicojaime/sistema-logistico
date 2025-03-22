@@ -28,7 +28,9 @@ export function UserManagement() {
             setLoading(true);
             const response = await authService.getUsers();
             if (response.ok) {
-                setUsers(response.data);
+                // Filtrar para excluir el usuario con ID 99999 (Sin Transportista)
+                const filteredUsers = response.data.filter(user => user.id !== 99999);
+                setUsers(filteredUsers);
             } else {
                 setError('Error al cargar usuarios');
             }
