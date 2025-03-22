@@ -25,6 +25,36 @@ const DEFAULT_LOCATION = {
   address: "Miami, Florida, United States"
 };
 
+// Ejemplos de ubicaciones predefinidas para búsqueda rápida
+// Esto sirve como fallback cuando la API de búsqueda no responde
+const FALLBACK_LOCATIONS = [
+  { 
+    display_name: "San Luis, Argentina", 
+    lat: -33.295555, 
+    lon: -66.338022
+  },
+  { 
+    display_name: "San Luis Potosí, México", 
+    lat: 22.156469, 
+    lon: -100.985662
+  },
+  { 
+    display_name: "San Luis Obispo, California, Estados Unidos", 
+    lat: 35.282752, 
+    lon: -120.659616
+  },
+  { 
+    display_name: "Miami, Florida, Estados Unidos", 
+    lat: 25.761681, 
+    lon: -80.191788
+  },
+  { 
+    display_name: "Nueva York, Estados Unidos", 
+    lat: 40.712776, 
+    lon: -74.005974
+  }
+];
+
 const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
   // Usar initialLocation si se proporciona, de lo contrario usar los valores por defecto
   const initialPos = initialLocation || DEFAULT_LOCATION;
@@ -39,8 +69,8 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
   const [address, setAddress] = useState(initialPos.address || DEFAULT_LOCATION.address);
   const [position, setPosition] = useState(startPosition);
   const [suggestions, setSuggestions] = useState([]);
-  const [isTyping, setIsTyping] = useState(false);
-  const [typingTimeout, setTypingTimeout] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [searchError, setSearchError] = useState(false);
   
   const mapContainerId = `map-${Math.random().toString(36).substring(2, 11)}`;
   
@@ -74,14 +104,22 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
     
     markerRef.current = marker;
 
+    // Evento cuando comienza a arrastrar el marcador
+    marker.on('dragstart', function() {
+      setIsDragging(true);
+    });
+
     // Evento cuando el marcador termina de arrastrarse
     marker.on('dragend', function(e) {
       const newPos = e.target.getLatLng();
       const newPosition = { lat: newPos.lat, lng: newPos.lng };
       setPosition(newPosition);
       
-      // Geocodificar la nueva posición
-      reverseGeocode(newPosition);
+      // Geocodificar la nueva posición después de un pequeño retraso
+      setTimeout(() => {
+        reverseGeocode(newPosition);
+        setIsDragging(false);
+      }, 300);
     });
 
     // Manejar clics en el mapa
@@ -110,14 +148,22 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
             } 
           }
         );
+        
+        if (!response.ok) {
+          throw new Error(`Error de red: ${response.status}`);
+        }
+        
         const data = await response.json();
         
         if (data && data.display_name) {
           setAddress(data.display_name);
-          setSearchText(data.display_name);
+          if (!isDragging) {
+            setSearchText(data.display_name);
+          }
         }
       } catch (error) {
         console.error("Error en geocodificación inversa:", error);
+        // Mantenemos la dirección anterior en caso de error
       }
     };
 
@@ -134,33 +180,67 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
     };
   }, [mapContainerId]); // Solo ejecutar cuando cambia el ID del contenedor
 
-  // Función para buscar sugerencias mientras se escribe
-  const searchSuggestions = async (text) => {
-    if (!text || text.trim().length < 3) {
+  // Búsqueda en modo local (fallback)
+  const searchLocalSuggestions = (text) => {
+    if (!text || text.trim().length < 2) {
       setSuggestions([]);
       return;
     }
     
+    const query = text.toLowerCase();
+    const filteredLocations = FALLBACK_LOCATIONS.filter(location => 
+      location.display_name.toLowerCase().includes(query)
+    );
+    
+    setSuggestions(filteredLocations);
+    setSearchError(false);
+  };
+
+  // Función para buscar sugerencias mientras se escribe
+  const searchSuggestions = async (text) => {
+    if (!text || text.trim().length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    
+    // Primero mostramos resultados locales mientras esperamos la API
+    searchLocalSuggestions(text);
+    
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 segundos timeout
+      
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(text)}&limit=5`,
         { 
           headers: { 
             'Accept-Language': 'es',
             'User-Agent': 'ALS-Logistica/1.0'
-          } 
+          },
+          signal: controller.signal
         }
       );
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`Error de red: ${response.status}`);
+      }
+      
       const data = await response.json();
       
       if (data && data.length > 0) {
         setSuggestions(data);
+        setSearchError(false);
       } else {
-        setSuggestions([]);
+        // Si no hay resultados, volvemos a los resultados locales
+        searchLocalSuggestions(text);
       }
     } catch (error) {
       console.error("Error buscando sugerencias:", error);
-      setSuggestions([]);
+      // En caso de error, usar las ubicaciones predefinidas como fallback
+      searchLocalSuggestions(text);
+      setSearchError(true);
     }
   };
 
@@ -168,20 +248,17 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
   const handleSearchChange = (e) => {
     const value = e.target.value;
     setSearchText(value);
-    setIsTyping(true);
     
-    // Limpiar el timeout anterior si existe
-    if (typingTimeout) {
-      clearTimeout(typingTimeout);
+    // Buscar después de un breve retraso para evitar demasiadas solicitudes
+    if (value.length >= 2) {
+      const delayDebounceFn = setTimeout(() => {
+        searchSuggestions(value);
+      }, 300);
+      
+      return () => clearTimeout(delayDebounceFn);
+    } else {
+      setSuggestions([]);
     }
-    
-    // Configurar un nuevo timeout
-    const timeout = setTimeout(() => {
-      setIsTyping(false);
-      searchSuggestions(value);
-    }, 500); // Esperar 500ms después de que el usuario deje de escribir
-    
-    setTypingTimeout(timeout);
   };
 
   // Función para seleccionar una sugerencia
@@ -206,6 +283,16 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
   // Función de búsqueda de dirección con el botón
   const geocodeAddress = async () => {
     if (!searchText || !searchText.trim() || !mapRef.current) return;
+
+    // Primero verificamos si coincide con alguna de nuestras ubicaciones predefinidas
+    const matchedLocation = FALLBACK_LOCATIONS.find(loc => 
+      loc.display_name.toLowerCase().includes(searchText.toLowerCase())
+    );
+    
+    if (matchedLocation) {
+      selectSuggestion(matchedLocation);
+      return;
+    }
     
     try {
       const response = await fetch(
@@ -217,30 +304,33 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
           } 
         }
       );
+      
+      if (!response.ok) {
+        throw new Error(`Error de red: ${response.status}`);
+      }
+      
       const data = await response.json();
       
       if (data && data.length > 0) {
         const result = data[0];
-        const newPos = { lat: parseFloat(result.lat), lng: parseFloat(result.lon) };
-        
-        // Actualizar posición
-        setPosition(newPos);
-        
-        // Actualizar marcador solo si existe
-        if (markerRef.current && mapRef.current) {
-          markerRef.current.setLatLng([newPos.lat, newPos.lng]);
-          mapRef.current.flyTo([newPos.lat, newPos.lng], 15);
-        }
-        
-        // Actualizar dirección
-        setAddress(result.display_name);
-        setSearchText(result.display_name);
-        setSuggestions([]);
+        selectSuggestion(result);
       } else {
+        // Si no hay resultados, mostrar mensaje
         alert("No se encontraron resultados para esta dirección");
       }
     } catch (error) {
       console.error("Error en geocodificación:", error);
+      
+      // Intentar buscar en las ubicaciones locales como fallback
+      const matchedLocation = FALLBACK_LOCATIONS.find(loc => 
+        loc.display_name.toLowerCase().includes(searchText.toLowerCase())
+      );
+      
+      if (matchedLocation) {
+        selectSuggestion(matchedLocation);
+      } else {
+        alert("Error al buscar la dirección. Por favor intente nuevamente.");
+      }
     }
   };
 
@@ -266,12 +356,18 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
             placeholder="Ingresar dirección"
             value={searchText}
             onChange={handleSearchChange}
+            onFocus={() => {
+              if (searchText.trim().length >= 2) {
+                searchSuggestions(searchText);
+              }
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
                 geocodeAddress();
               }
             }}
+            autoComplete="off" // Deshabilitar el autocompletado del navegador
           />
           <button
             type="button"
@@ -285,9 +381,14 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
         {/* Lista de sugerencias */}
         {suggestions.length > 0 && (
           <ul className="absolute z-10 w-full bg-white mt-1 border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+            {searchError && (
+              <li className="px-4 py-2 text-sm text-orange-700 bg-orange-50">
+                Usando resultados locales - API no disponible
+              </li>
+            )}
             {suggestions.map((suggestion, index) => (
               <li 
-                key={`${suggestion.place_id}-${index}`}
+                key={`suggestion-${index}`}
                 className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm border-b last:border-b-0"
                 onClick={() => selectSuggestion(suggestion)}
               >
