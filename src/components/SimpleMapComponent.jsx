@@ -18,29 +18,79 @@ let DefaultIcon = L.icon({
 
 L.Marker.prototype.options.icon = DefaultIcon;
 
-// Lista de ubicaciones comunes para facilitar la búsqueda
-const COMMON_LOCATIONS = [
-  { name: "Miami, Florida, USA", lat: 25.761681, lng: -80.191788 },
-  { name: "New York, NY, USA", lat: 40.712776, lng: -74.005974 },
-  { name: "Los Angeles, CA, USA", lat: 34.052235, lng: -118.243683 },
-  { name: "Houston, TX, USA", lat: 29.760427, lng: -95.369803 },
-  { name: "Chicago, IL, USA", lat: 41.878113, lng: -87.629799 },
-  { name: "Miami Airport, FL, USA", lat: 25.795865, lng: -80.287046 },
-  { name: "Port Miami, FL, USA", lat: 25.774948, lng: -80.176567 },
-  { name: "Orlando, FL, USA", lat: 28.538336, lng: -81.379234 },
-  { name: "Tampa, FL, USA", lat: 27.950575, lng: -82.457178 },
-  { name: "Jacksonville, FL, USA", lat: 30.332184, lng: -81.655647 }
-];
+// Función de geocodificación usando Nominatim
+const geocodeAddress = async (address) => {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
+      {
+        headers: {
+          'Accept-Language': 'es',
+          'User-Agent': 'ALS-Logistics-App/1.0'
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Error de red: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    if (data && data.length > 0) {
+      return {
+        lat: parseFloat(data[0].lat),
+        lng: parseFloat(data[0].lon),
+        displayName: data[0].display_name
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error en geocodificación:', error);
+    return null;
+  }
+};
+
+// Función de geocodificación inversa
+const reverseGeocode = async (lat, lng) => {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+      {
+        headers: {
+          'Accept-Language': 'es',
+          'User-Agent': 'ALS-Logistics-App/1.0'
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Error de red: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    if (data && data.display_name) {
+      return data.display_name;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error en geocodificación inversa:', error);
+    return null;
+  }
+};
 
 const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
-  // Coordenadas por defecto para Miami
+  // Coordenadas por defecto (Miami)
   const DEFAULT_LOCATION = { 
     lat: 25.761681, 
     lng: -80.191788,
-    address: "Miami, Florida, USA"
+    address: ''
   };
-
-  // Configuración inicial con valores por defecto o proporcionados
+  
+  // Usar initialLocation si se proporciona
   const initialPos = initialLocation || DEFAULT_LOCATION;
   
   const [position, setPosition] = useState({
@@ -49,225 +99,165 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
   });
   const [address, setAddress] = useState(initialPos.address || '');
   const [searchText, setSearchText] = useState('');
-  const [suggestions, setSuggestions] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const mapContainerId = `map-${Date.now()}`;
   
-  // Inicializar mapa
+  // Inicializar el mapa
   useEffect(() => {
     // Crear mapa
-    const map = L.map(mapContainerId).setView([position.lat, position.lng], 13);
-    mapRef.current = map;
-    
-    // Añadir capa de tiles
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    }).addTo(map);
-    
-    // Añadir marcador
-    const marker = L.marker([position.lat, position.lng], { draggable: true }).addTo(map);
-    markerRef.current = marker;
-    
-    // Manejar arrastre del marcador
-    marker.on('dragend', function(e) {
-      const pos = e.target.getLatLng();
-      setPosition({ lat: pos.lat, lng: pos.lng });
-      reverseGeocode(pos.lat, pos.lng);
-    });
-    
-    // Manejar clic en el mapa
-    map.on('click', function(e) {
-      const { lat, lng } = e.latlng;
+    try {
+      const map = L.map(mapContainerId).setView([position.lat, position.lng], 13);
+      mapRef.current = map;
       
-      setPosition({ lat, lng });
-      marker.setLatLng([lat, lng]);
-      reverseGeocode(lat, lng);
-    });
-    
-    // Geocodificación inversa para obtener dirección a partir de coordenadas
-    const reverseGeocode = async (lat, lng) => {
-      try {
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=es`,
-          { headers: { 'User-Agent': 'ALS-Logistics-App' } }
-        );
+      // Añadir capa de OpenStreetMap
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(map);
+      
+      // Añadir marcador
+      const marker = L.marker([position.lat, position.lng], { draggable: true }).addTo(map);
+      markerRef.current = marker;
+      
+      // Manejar arrastre del marcador
+      marker.on('dragend', async function(e) {
+        const pos = e.target.getLatLng();
+        setPosition({ lat: pos.lat, lng: pos.lng });
         
-        if (!response.ok) {
-          throw new Error('Error en geocodificación inversa');
+        try {
+          const addressResult = await reverseGeocode(pos.lat, pos.lng);
+          if (addressResult) {
+            setAddress(addressResult);
+          } else {
+            setAddress(`${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`);
+          }
+        } catch (err) {
+          console.error('Error en geocodificación inversa:', err);
+          setAddress(`${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`);
         }
+      });
+      
+      // Manejar clic en el mapa
+      map.on('click', async function(e) {
+        const pos = e.latlng;
+        marker.setLatLng(pos);
+        setPosition({ lat: pos.lat, lng: pos.lng });
         
-        const data = await response.json();
-        if (data && data.display_name) {
-          setAddress(data.display_name);
-        } else {
-          setAddress(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+        try {
+          const addressResult = await reverseGeocode(pos.lat, pos.lng);
+          if (addressResult) {
+            setAddress(addressResult);
+          } else {
+            setAddress(`${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`);
+          }
+        } catch (err) {
+          console.error('Error en geocodificación inversa:', err);
+          setAddress(`${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`);
         }
-      } catch (error) {
-        console.error('Error:', error);
-        setAddress(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+      });
+      
+      // Obtener dirección inicial si es necesario
+      if (initialPos.lat && initialPos.lng && !initialPos.address) {
+        (async () => {
+          try {
+            const addressResult = await reverseGeocode(initialPos.lat, initialPos.lng);
+            if (addressResult) {
+              setAddress(addressResult);
+            }
+          } catch (err) {
+            console.error('Error al obtener dirección inicial:', err);
+          }
+        })();
       }
-    };
-    
-    // Intentar obtener dirección inicial si no está disponible
-    if (!address && initialPos) {
-      reverseGeocode(initialPos.lat, initialPos.lng);
+    } catch (err) {
+      console.error('Error al inicializar el mapa:', err);
+      setError('Error al inicializar el mapa. Intente nuevamente más tarde.');
     }
     
     // Limpiar al desmontar
     return () => {
-      map.remove();
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+        markerRef.current = null;
+      }
     };
   }, []);
-
-  // Filtrar sugerencias basadas en el texto de búsqueda
-  const filterSuggestions = (text) => {
-    if (!text || text.length < 2) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
+  
+  // Manejar búsqueda de dirección
+  const handleSearch = async () => {
+    if (!searchText.trim()) return;
     
-    const filtered = COMMON_LOCATIONS.filter(location => 
-      location.name.toLowerCase().includes(text.toLowerCase())
-    );
-    
-    setSuggestions(filtered);
-    setShowSuggestions(filtered.length > 0);
-  };
-
-  // Manejar cambios en el campo de búsqueda
-  const handleSearchChange = (e) => {
-    const text = e.target.value;
-    setSearchText(text);
-    filterSuggestions(text);
-  };
-
-  // Seleccionar ubicación desde las sugerencias
-  const selectLocation = (location) => {
-    setPosition({ lat: location.lat, lng: location.lng });
-    setAddress(location.name);
-    setSearchText(location.name);
-    setShowSuggestions(false);
-    
-    if (mapRef.current && markerRef.current) {
-      markerRef.current.setLatLng([location.lat, location.lng]);
-      mapRef.current.setView([location.lat, location.lng], 13);
-    }
-  };
-
-  // Buscar dirección ingresada manualmente
-  const searchAddress = async () => {
-    if (!searchText || searchText.trim().length < 3) {
-      setError('Por favor ingrese una dirección más específica');
-      return;
-    }
-    
+    setLoading(true);
     setError('');
     
-    // Primero buscar en ubicaciones comunes
-    const localMatch = COMMON_LOCATIONS.find(loc => 
-      loc.name.toLowerCase().includes(searchText.toLowerCase())
-    );
-    
-    if (localMatch) {
-      selectLocation(localMatch);
-      return;
-    }
-    
-    // Si no se encuentra localmente, usar la API de geocodificación
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchText)}&limit=1&accept-language=es`,
-        { headers: { 'User-Agent': 'ALS-Logistics-App' } }
-      );
+      const result = await geocodeAddress(searchText);
       
-      if (!response.ok) {
-        throw new Error('Error en la búsqueda');
-      }
-      
-      const data = await response.json();
-      
-      if (data && data.length > 0) {
-        const result = data[0];
-        const location = {
-          lat: parseFloat(result.lat),
-          lng: parseFloat(result.lon),
-          name: result.display_name
-        };
+      if (result) {
+        setPosition({ lat: result.lat, lng: result.lng });
+        setAddress(result.displayName);
         
-        selectLocation(location);
+        if (mapRef.current && markerRef.current) {
+          markerRef.current.setLatLng([result.lat, result.lng]);
+          mapRef.current.setView([result.lat, result.lng], 15);
+        }
       } else {
-        setError('No se encontraron resultados para esta dirección');
+        setError('No se encontró la dirección. Intente con otra búsqueda o seleccione directamente en el mapa.');
       }
-    } catch (error) {
-      console.error('Error:', error);
-      setError('Error al buscar la dirección. Intente con otra o seleccione directamente en el mapa.');
+    } catch (err) {
+      console.error('Error en búsqueda:', err);
+      setError('Error al buscar la dirección. Intente más tarde o seleccione directamente en el mapa.');
+    } finally {
+      setLoading(false);
     }
   };
-
+  
   // Manejar tecla Enter en el campo de búsqueda
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      searchAddress();
+      handleSearch();
     }
   };
-
-  // Confirmar la ubicación seleccionada
+  
+  // Confirmar ubicación
   const handleConfirmLocation = () => {
     onSelectLocation({
       lat: position.lat,
       lng: position.lng,
-      address: address
+      address: address || `${position.lat.toFixed(6)}, ${position.lng.toFixed(6)}`
     });
   };
-
+  
   return (
     <div className="flex flex-col gap-4">
-      <div className="relative">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Buscar dirección (ej: Miami, Florida)..."
-            value={searchText}
-            onChange={handleSearchChange}
-            onKeyPress={handleKeyPress}
-            onFocus={() => filterSuggestions(searchText)}
-            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-          />
-          <button
-            onClick={searchAddress}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Buscar
-          </button>
-        </div>
-        
-        {error && (
-          <div className="text-red-500 text-sm mt-1">
-            {error}
-          </div>
-        )}
-        
-        {showSuggestions && suggestions.length > 0 && (
-          <div className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
-            {suggestions.map((location, index) => (
-              <div 
-                key={index}
-                className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                onClick={() => selectLocation(location)}
-              >
-                {location.name}
-              </div>
-            ))}
-          </div>
-        )}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Buscar dirección (ej: San Luis 1234, Argentina)"
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          onKeyPress={handleKeyPress}
+        />
+        <button
+          onClick={handleSearch}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          disabled={loading}
+        >
+          {loading ? '...' : 'Buscar'}
+        </button>
       </div>
+      
+      {error && (
+        <div className="p-2 text-sm text-red-500 bg-red-50 border border-red-100 rounded">
+          {error}
+        </div>
+      )}
       
       <div
         id={mapContainerId}
@@ -295,7 +285,7 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
           <p className="text-sm break-words">{address || 'No disponible'}</p>
         </div>
       </div>
-
+      
       <div className="flex justify-end mt-2">
         <button
           onClick={handleConfirmLocation}

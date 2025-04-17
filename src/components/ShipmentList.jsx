@@ -1043,7 +1043,7 @@ export function ShipmentList() {
                                 step="0.1"
                               />
                             ) : (
-                              `${item.weight} kg`
+                              `${item.weight} lb`
                             )}
                           </td>
                           {user.role === 'admin' && (
@@ -1078,7 +1078,7 @@ export function ShipmentList() {
                       <tr className="font-semibold border-t">
                         <td colSpan="2" className="px-4 py-2 text-right">Total:</td>
                         <td className="px-4 py-2 text-right">
-                          {(isEditing ? editData.items : modalData.items).reduce((total, item) => total + (parseFloat(item.weight) * parseFloat(item.quantity)), 0).toFixed(2)} kg
+                          {(isEditing ? editData.items : modalData.items).reduce((total, item) => total + (parseFloat(item.weight) * parseFloat(item.quantity)), 0).toFixed(2)} lb
                         </td>
                         {user.role === 'admin' && (
                           <td className="px-4 py-2 text-right">

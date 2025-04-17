@@ -6,6 +6,8 @@ import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
 import SimpleMapModal from './SimpleMapModal';
+import DescriptionAutocomplete from './DescriptionAutocomplete';
+
 
 // Componente de búsqueda de clientes con autocompletado
 const ClientSearch = ({ value, onChange, onCreateNew }) => {
@@ -247,6 +249,12 @@ const ItemForm = ({ onAdd, className = '' }) => {
     setItem(INITIAL_ITEM);
     setError('');
   };
+  const handleItemChange = (field, value) => {
+    setItem(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
 
   return (
     <div className={`space-y-4 ${className}`}>
@@ -260,12 +268,11 @@ const ItemForm = ({ onAdd, className = '' }) => {
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Descripción
           </label>
-          <input
-            type="text"
-            name="descripcion"
+          {/* Reemplazar el input normal por el DescriptionAutocomplete */}
+          <DescriptionAutocomplete
             value={item.descripcion}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onChange={(value) => handleItemChange('descripcion', value)}
+            placeholder="Selecciona o ingresa descripción"
           />
         </div>
         <div>
@@ -545,7 +552,7 @@ export function CreateShipment({ onClose }) {
         const envios = enviosResponse?.data || [];
         const usersResponse = await api.get('/users');
         const usersData = usersResponse?.data || [];
-        
+
         let transportistasData = usersData
           .filter((user) => user.role === 'transportista')
           .map((transportista) => {
@@ -561,12 +568,12 @@ export function CreateShipment({ onClose }) {
               displayName: `${transportista.firstname} ${transportista.lastname} (${enviosPendientes} envíos pendientes)`,
             };
           });
-        
+
         // Ordenar transportistas por cantidad de envíos pendientes (de menor a mayor)
-        transportistasData = transportistasData.sort((a, b) => 
+        transportistasData = transportistasData.sort((a, b) =>
           a.enviosPendientes - b.enviosPendientes
         );
-  
+
         // Añadir la opción "Sin Transportista" al principio de la lista
         transportistasData.unshift({
           id: 99999,
@@ -574,7 +581,7 @@ export function CreateShipment({ onClose }) {
           name: "Sin Transportista",
           displayName: "Sin Transportista (0 envíos pendientes)",
         });
-  
+
         setTransportistas(transportistasData);
       } catch (error) {
         console.error('Error al cargar transportistas:', error);
