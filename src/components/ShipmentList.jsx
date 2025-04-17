@@ -14,7 +14,8 @@ import {
   Download,
   Edit,
   Save,
-  MapPin
+  MapPin,
+  DollarSign
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useShipments } from '../contexts/ShipmentsContext';
@@ -159,7 +160,7 @@ export function ShipmentList() {
 
         // Añadir la opción "Sin Transportista" al principio de la lista
         transportistasData.unshift({
-          id: 99999,
+          id: "99999", // Cambiado a string para evitar conflictos
           enviosPendientes: 0,
           name: "Sin Transportista",
           displayName: "Sin Transportista (0 envíos pendientes)",
@@ -175,6 +176,7 @@ export function ShipmentList() {
 
     cargarTransportistas();
   }, [user.role]);
+
   // Inicializar datos de edición cuando se abre el modal
   useEffect(() => {
     if (modalData && !editData) {
@@ -447,12 +449,14 @@ export function ShipmentList() {
   // Cambiar transportista del envío
   const handleDriverChange = async (shipment, newDriverId) => {
     try {
-      const selectedDriver = transportistas.find(t => t.id === parseInt(newDriverId));
+      // Convertir a string para evitar problemas con el ID 99999
+      const selectedDriverId = String(newDriverId);
+      const selectedDriver = transportistas.find(t => String(t.id) === selectedDriverId);
 
       const updatedShipment = {
         ...shipment,
-        driver_id: parseInt(newDriverId) || null,
-        driver_name: selectedDriver ? `${selectedDriver.firstname} ${selectedDriver.lastname}` : 'No asignado'
+        driver_id: selectedDriverId === "99999" ? null : selectedDriverId,
+        driver_name: selectedDriver ? selectedDriver.name : 'No asignado'
       };
 
       const success = await updateShipment(updatedShipment);
@@ -495,6 +499,13 @@ export function ShipmentList() {
       </div>
     );
   }
+
+  // Función para formatear el costo de envío correctamente
+  const formatShippingCost = (cost) => {
+    // Asegurarse que el costo sea un número
+    const numericCost = typeof cost === 'string' ? parseFloat(cost) : (typeof cost === 'number' ? cost : 0);
+    return isNaN(numericCost) ? '0.00' : numericCost.toFixed(2);
+  };
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -623,11 +634,10 @@ export function ShipmentList() {
                         {editingDriver === shipment.id ? (
                           <select
                             className="rounded-lg border border-gray-300 text-sm p-1 w-full"
-                            value={shipment.driver_id || ''}
+                            value={shipment.driver_id || '99999'}
                             onChange={(e) => handleDriverChange(shipment, e.target.value)}
                             onBlur={() => setEditingDriver(null)}
                           >
-                            <option value="">Seleccionar transportista</option>
                             {transportistas.map((transportista) => (
                               <option key={transportista.id} value={transportista.id}>
                                 {transportista.displayName}
@@ -810,22 +820,44 @@ export function ShipmentList() {
                   )}
                 </div>
 
+                {/* Costo de Envío - NUEVO */}
+                <div>
+                  <h3 className="font-semibold mb-2 flex items-center gap-1">
+                    <DollarSign className="w-4 h-4" />
+                    Costo de Envío
+                  </h3>
+                  {isEditing && user.role === 'admin' ? (
+                    <input
+                      type="number"
+                      value={typeof editData.shipping_cost === 'number' ? editData.shipping_cost : parseFloat(editData.shipping_cost) || 0}
+                      onChange={(e) => handleEditChange('shipping_cost', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      min="0"
+                      step="0.01"
+                    />
+                  ) : (
+                    <p className="text-lg font-semibold text-green-600">
+                      ${formatShippingCost(modalData.shipping_cost)}
+                    </p>
+                  )}
+                </div>
+
                 {user.role === 'admin' && (
                   <div>
                     <h3 className="font-semibold mb-2">Transportista Asignado</h3>
                     {isEditing && canEdit(modalData) ? (
                       <select
-                        value={editData.driver_id || ''}
+                        value={editData.driver_id || '99999'}
                         onChange={(e) => handleEditChange('driver_id', e.target.value)}
                         className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                         disabled={loadingTransportistas}
                       >
-                        <option value="">
+                        <option value="99999">
                           {loadingTransportistas
                             ? 'Cargando transportistas...'
                             : 'Seleccionar transportista'}
                         </option>
-                        {transportistas.map((transportista) => (
+                        {transportistas.filter(t => t.id !== "99999").map((transportista) => (
                           <option key={transportista.id} value={transportista.id}>
                             {transportista.displayName}
                           </option>
@@ -894,20 +926,6 @@ export function ShipmentList() {
                     </p>
                   )}
                 </div>
-
-                {isEditing && user.role === 'admin' && canEdit(modalData) && (
-                  <div>
-                    <h3 className="font-semibold mb-2">Costo de Envío</h3>
-                    <input
-                      type="number"
-                      value={editData.shipping_cost || 0}
-                      onChange={(e) => handleEditChange('shipping_cost', parseFloat(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      min="0"
-                      step="0.01"
-                    />
-                  </div>
-                )}
               </div>
 
               {/* Documentos */}
@@ -1078,15 +1096,56 @@ export function ShipmentList() {
                       <tr className="font-semibold border-t">
                         <td colSpan="2" className="px-4 py-2 text-right">Total:</td>
                         <td className="px-4 py-2 text-right">
-                          {(isEditing ? editData.items : modalData.items).reduce((total, item) => total + (parseFloat(item.weight) * parseFloat(item.quantity)), 0).toFixed(2)} lb
+                          {(isEditing ? editData.items : modalData.items).reduce((total, item) => {
+                            const weight = parseFloat(item.weight) || 0;
+                            const quantity = parseFloat(item.quantity) || 0;
+                            return total + (weight * quantity);
+                          }, 0).toFixed(2)} lb
                         </td>
                         {user.role === 'admin' && (
                           <td className="px-4 py-2 text-right">
-                            ${(isEditing ? editData.items : modalData.items).reduce((total, item) => total + (parseFloat(item.value) * parseFloat(item.quantity)), 0).toFixed(2)}
+                            ${(isEditing ? editData.items : modalData.items).reduce((total, item) => {
+                              const value = parseFloat(item.value) || 0;
+                              const quantity = parseFloat(item.quantity) || 0;
+                              return total + (value * quantity);
+                            }, 0).toFixed(2)}
                           </td>
                         )}
                         {isEditing && user.role === 'admin' && canEdit(modalData) && <td></td>}
                       </tr>
+
+                      {/* Nueva fila para Costo de Envío */}
+                      {user.role === 'admin' && (
+                        <tr className="font-semibold text-blue-700">
+                          <td colSpan="3" className="px-4 py-2 text-right">
+                            Costo de Envío:
+                          </td>
+                          <td className="px-4 py-2 text-right">
+                            ${formatShippingCost(modalData.shipping_cost)}
+                          </td>
+                          {isEditing && canEdit(modalData) && <td></td>}
+                        </tr>
+                      )}
+
+                      {/* Fila de Total General (incluye costo de envío) */}
+                      {user.role === 'admin' && (
+                        <tr className="font-semibold text-green-700 border-t-2 border-green-500">
+                          <td colSpan="3" className="px-4 py-2 text-right">
+                            Total General:
+                          </td>
+                          <td className="px-4 py-2 text-right">
+                            ${(
+                              (isEditing ? editData.items : modalData.items).reduce((total, item) => {
+                                const value = parseFloat(item.value) || 0;
+                                const quantity = parseFloat(item.quantity) || 0;
+                                return total + (value * quantity);
+                              }, 0) +
+                              (parseFloat(isEditing ? editData.shipping_cost : modalData.shipping_cost) || 0)
+                            ).toFixed(2)}
+                          </td>
+                          {isEditing && canEdit(modalData) && <td></td>}
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
