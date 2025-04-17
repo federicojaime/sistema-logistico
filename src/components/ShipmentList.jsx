@@ -15,7 +15,8 @@ import {
   Edit,
   Save,
   MapPin,
-  DollarSign
+  DollarSign,
+  Camera
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useShipments } from '../contexts/ShipmentsContext';
@@ -25,6 +26,7 @@ import { Alert, AlertDescription } from './ui/alert';
 import { shipmentsService } from '../services/shipmentsService';
 import SimpleMapModal from './SimpleMapModal';
 import api from '../services/api';
+import CameraPODCapture from './CameraPODCapture';
 
 const statusMap = {
   'pendiente': 'Pendiente',
@@ -96,6 +98,8 @@ export function ShipmentList() {
   const [loadingTransportistas, setLoadingTransportistas] = useState(false);
   const [showOriginMap, setShowOriginMap] = useState(false);
   const [showDestinationMap, setShowDestinationMap] = useState(false);
+  const [showCameraModal, setShowCameraModal] = useState(false);
+  const [currentShipmentForCamera, setCurrentShipmentForCamera] = useState(null);
 
   // Función común para verificar si un envío puede ser editado
   const canEdit = (shipment) => {
@@ -320,9 +324,49 @@ export function ShipmentList() {
     }
   };
 
+  // Manejar la captura del PDF desde la cámara
+  const handlePDFCapture = async (pdfFile) => {
+    if (!pdfFile || !currentShipmentForCamera) return;
+
+    try {
+      setUploadingId(currentShipmentForCamera);
+
+      // Crear FormData para enviar el archivo
+      const formData = new FormData();
+      formData.append('documents[]', pdfFile);
+
+      // Usar el servicio existente para subir el documento
+      const response = await shipmentsService.uploadShipmentDocument(currentShipmentForCamera, formData);
+
+      if (response && response.ok) {
+        setSuccessMessage('Documento POD capturado y subido correctamente');
+        refreshShipments();
+        setShowCameraModal(false);
+        setCurrentShipmentForCamera(null);
+      } else {
+        throw new Error('Error al subir el documento capturado');
+      }
+    } catch (error) {
+      console.error('Error al subir documento capturado:', error);
+      setSuccessMessage('Error al procesar el documento capturado: ' + (error.message || 'Error desconocido'));
+    } finally {
+      setUploadingId(null);
+    }
+  };
+
   // Activar el input de archivo para POD
   const handleUploadPOD = (shipmentId) => {
-    document.getElementById(`upload-pod-${shipmentId}`).click();
+    // Preguntar al usuario si desea usar la cámara o subir un archivo
+    const useCamera = window.confirm("¿Desea usar la cámara para capturar el POD? Seleccione 'Cancelar' para subir un archivo PDF.");
+
+    if (useCamera) {
+      // Usar la cámara
+      setCurrentShipmentForCamera(shipmentId);
+      setShowCameraModal(true);
+    } else {
+      // Usar el método original de subida de archivos
+      document.getElementById(`upload-pod-${shipmentId}`).click();
+    }
   };
 
   // Cargar POD directamente desde la lista
@@ -686,7 +730,6 @@ export function ShipmentList() {
                         >
                           <Eye className="w-5 h-5" />
                         </button>
-
                         {/* Mostrar factura solo si es admin y el envío está entregado */}
                         {canShowInvoice(shipment) && (
                           <button
@@ -959,7 +1002,7 @@ export function ShipmentList() {
                       <button
                         onClick={() => document.getElementById('uploadPdf').click()}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 
-                      flex items-center gap-2 transition-colors text-sm"
+            flex items-center gap-2 transition-colors text-sm"
                       >
                         <Upload className="w-4 h-4" />
                         Subir PDF
@@ -981,7 +1024,7 @@ export function ShipmentList() {
                         <span className="text-sm flex-1">{doc.name}</span>
                         <div className="flex gap-2">
                           <button
-                            onClick={() => window.open(`${import.meta.env.VITE_API_URL}/shipment/document/${doc.id}`, '_blank')}
+                            onClick={() => window.open(`${import.meta.env.VITE_API_URL}/${doc.file_content}`, '_blank')}
                             className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
                           >
                             <Eye className="w-4 h-4" />
@@ -989,7 +1032,7 @@ export function ShipmentList() {
                           </button>
 
                           <a
-                            href={`${import.meta.env.VITE_API_URL}/shipment/document/${doc.id}`}
+                            href={`${import.meta.env.VITE_API_URL}/${doc.file_content}`}
                             download
                             className="text-green-600 hover:text-green-800 flex items-center gap-1"
                           >
@@ -1025,7 +1068,7 @@ export function ShipmentList() {
                       <button
                         onClick={handleAddItem}
                         className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 
-                            flex items-center gap-2 transition-colors text-sm"
+                  flex items-center gap-2 transition-colors text-sm"
                       >
                         <Plus className="w-4 h-4" />
                         Agregar Item
@@ -1210,6 +1253,18 @@ export function ShipmentList() {
             }}
           />
         </>
+      )}
+
+      {/* Modal de captura con cámara */}
+      {showCameraModal && currentShipmentForCamera && (
+        <CameraPODCapture
+          shipmentId={currentShipmentForCamera}
+          onCapture={handlePDFCapture}
+          onClose={() => {
+            setShowCameraModal(false);
+            setCurrentShipmentForCamera(null);
+          }}
+        />
       )}
     </div>
   );
