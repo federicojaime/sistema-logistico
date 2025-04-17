@@ -429,6 +429,7 @@ export function CreateShipment({ onClose }) {
   const [loadingTransportistas, setLoadingTransportistas] = useState(true);
   const [showError, setShowError] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Map selection state
   const [showOriginMap, setShowOriginMap] = useState(false);
@@ -443,12 +444,18 @@ export function CreateShipment({ onClose }) {
         cliente: client.business_name || client.name,
         clientId: client.id
       }));
+      // Limpiar el error del cliente si existía
+      setErrors(prev => ({ ...prev, cliente: undefined }));
     } else {
       // Si es solo texto, actualizar el nombre del cliente
       setShipment(prev => ({
         ...prev,
         cliente: client
       }));
+      if (client) {
+        // Si hay texto, limpiar el error
+        setErrors(prev => ({ ...prev, cliente: undefined }));
+      }
     }
   };
 
@@ -509,6 +516,11 @@ export function CreateShipment({ onClose }) {
         ...prev,
         items: [...regularItems, ...serviceItems]
       }));
+
+      // Si hay items, limpiamos el error de items
+      if (regularItems.length > 0 || serviceItems.length > 0) {
+        setErrors(prev => ({ ...prev, items: undefined }));
+      }
     };
 
     updateServiceItems();
@@ -574,13 +586,7 @@ export function CreateShipment({ onClose }) {
           a.enviosPendientes - b.enviosPendientes
         );
 
-        // Añadir la opción "Sin Transportista" al principio de la lista
-        transportistasData.unshift({
-          id: 99999,
-          enviosPendientes: 0,
-          name: "Sin Transportista",
-          displayName: "Sin Transportista (0 envíos pendientes)",
-        });
+       
 
         setTransportistas(transportistasData);
       } catch (error) {
@@ -609,11 +615,17 @@ export function CreateShipment({ onClose }) {
 
   const handleChange = useCallback((e) => {
     const { name, value } = e.target;
+
+    // Limpiar el error asociado a este campo si existe
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: undefined }));
+    }
+
     setShipment((prev) => ({
       ...prev,
       [name]: name === 'costoEnvio' ? parseFloat(value) || 0 : value,
     }));
-  }, []);
+  }, [errors]);
 
   const addItem = useCallback((item) => {
     // Solo agregamos items que no sean de servicio (los de servicio se manejan automáticamente)
@@ -622,6 +634,9 @@ export function CreateShipment({ onClose }) {
         ...prev,
         items: [...prev.items, item],
       }));
+
+      // Al agregar un item, limpiar el error de items si existía
+      setErrors(prev => ({ ...prev, items: undefined }));
     }
   }, []);
 
@@ -653,6 +668,9 @@ export function CreateShipment({ onClose }) {
       latitudOrigen: String(location.lat),
       longitudOrigen: String(location.lng),
     }));
+
+    // Limpiar error de dirección origen
+    setErrors(prev => ({ ...prev, direccionOrigen: undefined }));
   }, []);
 
   const handleSelectDestinationLocation = useCallback((location) => {
@@ -662,6 +680,9 @@ export function CreateShipment({ onClose }) {
       latitudDestino: String(location.lat),
       longitudDestino: String(location.lng),
     }));
+
+    // Limpiar error de dirección destino
+    setErrors(prev => ({ ...prev, direccionDestino: undefined }));
   }, []);
 
   const validateForm = () => {
@@ -718,7 +739,18 @@ export function CreateShipment({ onClose }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validateForm()) return;
+    if (!validateForm()) {
+      // Mostrar mensaje indicando que hay errores que necesitan ser corregidos
+      setShowError(true);
+      setErrors(prev => ({
+        ...prev,
+        submit: 'Por favor, corrija los errores antes de enviar el formulario.'
+      }));
+      return;
+    }
+
+    // Indicar que se está enviando el formulario
+    setIsSubmitting(true);
 
     try {
       // Crear FormData para enviar archivos
@@ -768,6 +800,8 @@ export function CreateShipment({ onClose }) {
 
       if (response.ok) {
         setShowSuccess(true);
+        setShowError(false);
+        setErrors({});
         setTimeout(() => {
           navigate('/');
         }, 2000);
@@ -781,6 +815,9 @@ export function CreateShipment({ onClose }) {
         ...prev,
         submit: error.message || 'Error al crear el envío'
       }));
+    } finally {
+      // Permitir que se pueda volver a intentar enviar el formulario
+      setIsSubmitting(false);
     }
   };
 
@@ -1119,11 +1156,11 @@ export function CreateShipment({ onClose }) {
                     accept="application/pdf"
                     onChange={handleAddPdf}
                     className="block w-full text-sm text-gray-500
-                      file:mr-4 file:py-2 file:px-4
-                      file:rounded-full file:border-0
-                      file:text-sm file:font-semibold
-                      file:bg-blue-50 file:text-blue-700
-                      hover:file:bg-blue-100"
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-full file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-blue-50 file:text-blue-700
+                    hover:file:bg-blue-100"
                   />
                 )}
                 <div className="space-y-2">
@@ -1166,10 +1203,10 @@ export function CreateShipment({ onClose }) {
           <div className="mt-6 flex justify-end">
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              disabled={Object.keys(errors).length > 0}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isSubmitting}
             >
-              Crear Envío
+              {isSubmitting ? 'Creando envío...' : 'Crear Envío'}
             </button>
           </div>
         </form>

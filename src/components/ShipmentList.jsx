@@ -742,6 +742,7 @@ export function ShipmentList() {
         </div>
       )}
 
+
       {/* Modal de Detalles */}
       {modalData && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
@@ -926,6 +927,27 @@ export function ShipmentList() {
                     </p>
                   )}
                 </div>
+              </div>
+              {/* Comentarios - NUEVA SECCIÓN */}
+              <div className="col-span-2 mt-4">
+                <h3 className="font-semibold mb-2">Comentarios / Instrucciones</h3>
+                {isEditing ? (
+                  <textarea
+                    value={editData.comments || ''}
+                    onChange={(e) => handleEditChange('comments', e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows="3"
+                    placeholder="Ejemplo: Llamar 1 hr antes de entrega TEL # 555-123-4567 JUAN"
+                  />
+                ) : (
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    {modalData.comments ? (
+                      <p className="text-gray-700 whitespace-pre-line">{modalData.comments}</p>
+                    ) : (
+                      <p className="text-gray-500 italic">No hay comentarios o instrucciones</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Documentos */}
