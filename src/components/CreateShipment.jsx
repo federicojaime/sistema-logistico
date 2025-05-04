@@ -178,7 +178,7 @@ const INITIAL_SHIPMENT = {
   latitudDestino: '',
   longitudDestino: '',
   items: [],
-  costoEnvio: 0,
+  costoEnvio: 1,
   status: 'pendiente',
   fechaCreacion: new Date().toISOString(),
   pdfs: [],
@@ -586,7 +586,7 @@ export function CreateShipment({ onClose }) {
           a.enviosPendientes - b.enviosPendientes
         );
 
-       
+
 
         setTransportistas(transportistasData);
       } catch (error) {
@@ -623,7 +623,7 @@ export function CreateShipment({ onClose }) {
 
     setShipment((prev) => ({
       ...prev,
-      [name]: name === 'costoEnvio' ? parseFloat(value) || 0 : value,
+      [name]: name === 'costoEnvio' ? parseFloat(value) || 1 : value,
     }));
   }, [errors]);
 
@@ -696,8 +696,8 @@ export function CreateShipment({ onClose }) {
       newErrors.direccionOrigen = 'La dirección de origen es requerida';
     if (!shipment.direccionDestino.trim())
       newErrors.direccionDestino = 'La dirección de destino es requerida';
-    if (shipment.costoEnvio <= 0)
-      newErrors.costoEnvio = 'El costo de envío debe ser mayor a 0';
+    /*if (shipment.costoEnvio <= )
+      newErrors.costoEnvio = 'El costo de envío debe ser mayor a 0';*/
     if (shipment.items.length === 0)
       newErrors.items = 'Debe agregar al menos un item';
     setErrors(newErrors);
@@ -898,7 +898,7 @@ export function CreateShipment({ onClose }) {
                     <p className="mt-1 text-sm text-red-500">{errors.cliente}</p>
                   )}
                 </div>
-                <div>
+                {/*                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Costo de Envío
                   </label>
@@ -915,7 +915,7 @@ export function CreateShipment({ onClose }) {
                   {errors.costoEnvio && (
                     <p className="mt-1 text-sm text-red-500">{errors.costoEnvio}</p>
                   )}
-                </div>
+                </div>*/}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Transportista Asignado

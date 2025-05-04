@@ -88,6 +88,8 @@ export const shipmentsService = {
         }
     },
 
+    // En src/services/shipmentsService.js
+    // Reemplazar o modificar el método updateShipment
     updateShipment: async (id, data) => {
         try {
             // Si hay archivos, usar FormData

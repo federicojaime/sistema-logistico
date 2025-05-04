@@ -104,6 +104,9 @@ export function ShipmentList() {
   // Función común para verificar si un envío puede ser editado
   const canEdit = (shipment) => {
     if (!shipment) return false;
+    // Permitir a los administradores editar cualquier envío, independientemente del estado
+    if (user.role === 'admin') return true;
+    // Para otros roles, mantener la restricción
     return shipment.status !== 'entregado' && shipment.status !== 'cancelado';
   };
 
@@ -249,6 +252,7 @@ export function ShipmentList() {
   };
 
   // Guardar cambios
+  // En la función handleSaveChanges del componente ShipmentList.jsx
   const handleSaveChanges = async () => {
     try {
       // Asegúrate de que todos los campos necesarios estén presentes
@@ -266,6 +270,11 @@ export function ShipmentList() {
         destination_lat: String(editData.destination_lat),
         destination_lng: String(editData.destination_lng)
       };
+
+      // Incluye una flag para indicar que es un admin quien hace el cambio
+      if (user.role === 'admin') {
+        dataToSend.admin_override = true;
+      }
 
       const response = await shipmentsService.updateShipment(editData.id, dataToSend);
       if (response && (response.ok || response.status === 200)) {
@@ -636,6 +645,9 @@ export function ShipmentList() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Estado
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Referencia
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -649,9 +661,6 @@ export function ShipmentList() {
                       Transportista
                     </th>
                   )}
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Estado
-                  </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                     Acciones
                   </th>
@@ -660,6 +669,28 @@ export function ShipmentList() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredAndSortedShipments.map((shipment) => (
                   <tr key={shipment.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {editingStatus === shipment.id && canTransportistaEdit(shipment) ? (
+                        <select
+                          className="rounded-lg border border-gray-300 text-sm p-1"
+                          value={statusMap[shipment.status]}
+                          onChange={(e) => handleStatusChange(shipment, e.target.value)}
+                          onBlur={() => setEditingStatus(null)}
+                        >
+                          {Object.values(statusMap).map(status => (
+                            <option key={status} value={status}>{status}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                            ${statusColors[statusMap[shipment.status]]}`}
+                          onClick={() => user.role === 'transportista' && canTransportistaEdit(shipment) && setEditingStatus(shipment.id)}
+                          style={{ cursor: (user.role === 'transportista' && canTransportistaEdit(shipment)) ? 'pointer' : 'default' }}
+                        >
+                          {statusMap[shipment.status]}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {shipment.ref_code || `#${shipment.id.toString().padStart(6, '0')}`}
                     </td>
@@ -699,28 +730,7 @@ export function ShipmentList() {
                         )}
                       </td>
                     )}
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {editingStatus === shipment.id && canTransportistaEdit(shipment) ? (
-                        <select
-                          className="rounded-lg border border-gray-300 text-sm p-1"
-                          value={statusMap[shipment.status]}
-                          onChange={(e) => handleStatusChange(shipment, e.target.value)}
-                          onBlur={() => setEditingStatus(null)}
-                        >
-                          {Object.values(statusMap).map(status => (
-                            <option key={status} value={status}>{status}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                            ${statusColors[statusMap[shipment.status]]}`}
-                          onClick={() => user.role === 'transportista' && canTransportistaEdit(shipment) && setEditingStatus(shipment.id)}
-                          style={{ cursor: (user.role === 'transportista' && canTransportistaEdit(shipment)) ? 'pointer' : 'default' }}
-                        >
-                          {statusMap[shipment.status]}
-                        </span>
-                      )}
-                    </td>
+
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end items-center gap-2">
                         <button
@@ -795,7 +805,7 @@ export function ShipmentList() {
                 Detalles del Envío {modalData.ref_code || `#${modalData.id.toString().padStart(6, '0')}`}
               </h2>
               <div className="flex gap-2">
-                {((user.role === 'admin' && canEdit(modalData)) ||
+                {((user.role === 'admin') ||
                   (user.role === 'transportista' && canTransportistaEdit(modalData))) && (
                     <button
                       onClick={() => isEditing ? handleSaveChanges() : setIsEditing(true)}
@@ -867,8 +877,7 @@ export function ShipmentList() {
                 {/* Costo de Envío - NUEVO */}
                 <div>
                   <h3 className="font-semibold mb-2 flex items-center gap-1">
-                    <DollarSign className="w-4 h-4" />
-                    Costo de Envío
+                    Costo total:                     <DollarSign className="w-4 h-4" />
                   </h3>
                   {isEditing && user.role === 'admin' ? (
                     <input
@@ -1159,7 +1168,7 @@ export function ShipmentList() {
                       ))}
                       {/* Fila de Total */}
                       <tr className="font-semibold border-t">
-                        <td colSpan="2" className="px-4 py-2 text-right">Total:</td>
+                        <td colSpan="2" className="px-4 py-2 text-right">Costo Total:</td>
                         <td className="px-4 py-2 text-right">
                           {(isEditing ? editData.items : modalData.items).reduce((total, item) => {
                             const weight = parseFloat(item.weight) || 0;
@@ -1179,7 +1188,7 @@ export function ShipmentList() {
                         {isEditing && user.role === 'admin' && canEdit(modalData) && <td></td>}
                       </tr>
 
-                      {/* Nueva fila para Costo de Envío */}
+                      {/* Nueva fila para Costo de Envío 
                       {user.role === 'admin' && (
                         <tr className="font-semibold text-blue-700">
                           <td colSpan="3" className="px-4 py-2 text-right">
@@ -1190,9 +1199,9 @@ export function ShipmentList() {
                           </td>
                           {isEditing && canEdit(modalData) && <td></td>}
                         </tr>
-                      )}
+                      )}*/}
 
-                      {/* Fila de Total General (incluye costo de envío) */}
+                      {/* Fila de Total General (incluye costo de envío) 
                       {user.role === 'admin' && (
                         <tr className="font-semibold text-green-700 border-t-2 border-green-500">
                           <td colSpan="3" className="px-4 py-2 text-right">
@@ -1210,7 +1219,7 @@ export function ShipmentList() {
                           </td>
                           {isEditing && canEdit(modalData) && <td></td>}
                         </tr>
-                      )}
+                      )}*/}
                     </tbody>
                   </table>
                 </div>
