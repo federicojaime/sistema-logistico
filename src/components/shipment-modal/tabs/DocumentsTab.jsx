@@ -14,7 +14,8 @@ const DocumentsTab = ({
     handleDeleteDocument,
     formatDocumentUrl
 }) => {
-    const documents = editData?.documents || [];
+    // Asegurar que documents sea siempre un array
+    const documents = Array.isArray(editData?.documents) ? editData.documents : [];
 
     return (
         <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
@@ -54,7 +55,7 @@ const DocumentsTab = ({
                 {documents.length > 0 ? (
                     documents.map((doc, index) => (
                         <DocumentItem
-                            key={index}
+                            key={doc.id || index} // Usar ID si está disponible
                             doc={doc}
                             canEdit={
                                 (userRole === 'admin' && canEdit(shipment)) ||

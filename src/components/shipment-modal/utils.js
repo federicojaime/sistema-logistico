@@ -1,4 +1,4 @@
-// Utilidades para el componente ShipmentModal
+// src/components/shipment-modal/utils.js
 
 // Función para formatear correctamente la URL del documento
 export const formatDocumentUrl = (documentPath) => {

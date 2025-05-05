@@ -49,13 +49,54 @@ const ShipmentModal = ({
 
     // Inicializar datos de edición cuando se abre el modal
     useEffect(() => {
-        if (shipment && !editData) {
-            setEditData({
-                ...shipment,
-                items: shipment.items ? [...shipment.items] : []
-            });
-        }
-    }, [shipment]);
+        const loadShipmentData = async () => {
+            // Si ya tenemos datos, no hacer nada
+            if (editData) return;
+
+            if (shipment) {
+                try {
+                    // Intentar cargar datos frescos del servidor
+                    const freshData = await shipmentsService.getShipment(shipment.id);
+
+                    if (freshData && freshData.ok && freshData.data) {
+                        // Usar datos frescos
+                        setEditData({
+                            ...freshData.data,
+                            items: Array.isArray(freshData.data.items) ?
+                                [...freshData.data.items] : [],
+                            documents: Array.isArray(freshData.data.documents) ?
+                                [...freshData.data.documents] : []
+                        });
+                    } else {
+                        // Usar datos del props como fallback
+                        setEditData({
+                            ...shipment,
+                            items: shipment.items && Array.isArray(shipment.items)
+                                ? [...shipment.items]
+                                : [],
+                            documents: shipment.documents && Array.isArray(shipment.documents)
+                                ? [...shipment.documents]
+                                : []
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error cargando datos del envío:', error);
+                    // Usar datos del props como fallback
+                    setEditData({
+                        ...shipment,
+                        items: shipment.items && Array.isArray(shipment.items)
+                            ? [...shipment.items]
+                            : [],
+                        documents: shipment.documents && Array.isArray(shipment.documents)
+                            ? [...shipment.documents]
+                            : []
+                    });
+                }
+            }
+        };
+
+        loadShipmentData();
+    }, [shipment, editData, shipmentsService]);
 
     // Función para obtener los datos actualizados del servidor
     const reloadShipmentData = async () => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Edit, Save } from 'lucide-react';
 import { shipmentsService } from '../../services/shipmentsService';
 import TabPanel from './TabPanel';
@@ -8,7 +8,7 @@ import DetailsTab from './tabs/DetailsTab';
 import ItemsTab from './tabs/ItemsTab';
 import DocumentsTab from './tabs/DocumentsTab';
 import SimpleMapModal from '../SimpleMapModal';
-import { formatDocumentUrl, reloadShipmentData, refreshDocumentsList } from './utils';
+import api from '../../services/api';
 
 const ShipmentModal = ({
     shipment,
@@ -26,13 +26,102 @@ const ShipmentModal = ({
     const [showOriginMap, setShowOriginMap] = useState(false);
     const [showDestinationMap, setShowDestinationMap] = useState(false);
     const [activeTab, setActiveTab] = useState('details');
+    const [isLoading, setIsLoading] = useState(false);
+
+    // Formatear URL del documento correctamente
+    const formatDocumentUrl = useCallback((documentPath) => {
+        if (!documentPath) return '#';
+
+        // Si la ruta ya tiene http, es una URL completa
+        if (documentPath.startsWith('http')) {
+            return documentPath;
+        }
+
+        // Si la ruta comienza con / o no, asegurarse de que se forme bien la URL
+        const baseUrl = import.meta.env.VITE_API_URL;
+        const path = documentPath.startsWith('/') ? documentPath.substring(1) : documentPath;
+
+        return `${baseUrl}/${path}`;
+    }, []);
+
+    // Cargar documentos actualizados
+    const refreshDocumentsList = useCallback(async (shipmentId) => {
+        try {
+            setIsLoading(true);
+
+            // Hacer una solicitud separada para obtener los documentos más recientes
+            const response = await api.get(`/shipment/${shipmentId}/documents`);
+
+            if (response && Array.isArray(response)) {
+                // Formatear correctamente los documentos recibidos
+                const formattedDocuments = response.map(doc => ({
+                    ...doc,
+                    file_content: doc.file_content || doc.path || doc.url || ''
+                }));
+
+                // Actualizar solo los documentos en el estado, manteniendo el resto de datos
+                setEditData(prev => ({
+                    ...prev,
+                    documents: formattedDocuments
+                }));
+
+                return formattedDocuments;
+            }
+
+            return null;
+        } catch (error) {
+            console.error('Error al actualizar lista de documentos:', error);
+            return null;
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    // Recargar datos completos del envío
+    const reloadShipmentData = useCallback(async (shipmentId) => {
+        if (!shipmentId) return null;
+
+        try {
+            setIsLoading(true);
+            const response = await api.get(`/shipment/${shipmentId}`);
+
+            if (response && response.data) {
+                // Preservar los ítems actuales para no perderlos si se están editando
+                const currentItems = editData?.items || [];
+
+                // Formatear las rutas de documentos si existen
+                const formattedDocuments = Array.isArray(response.data.documents)
+                    ? response.data.documents.map(doc => ({
+                        ...doc,
+                        file_content: doc.file_content || doc.path || doc.url
+                    }))
+                    : [];
+
+                // Actualizar el estado con los datos frescos
+                setEditData(prev => ({
+                    ...response.data,
+                    items: isEditing ? currentItems : (Array.isArray(response.data.items) ? response.data.items : []),
+                    documents: formattedDocuments
+                }));
+
+                return response.data;
+            }
+        } catch (error) {
+            console.error('Error al recargar datos del envío:', error);
+        } finally {
+            setIsLoading(false);
+        }
+        return null;
+    }, [editData, isEditing]);
 
     // Inicializar datos cuando se abre el modal
     useEffect(() => {
         if (shipment && !editData) {
             setEditData({
                 ...shipment,
-                items: shipment.items ? [...shipment.items] : []
+                items: shipment.items && Array.isArray(shipment.items)
+                    ? [...shipment.items]
+                    : []
             });
         }
     }, [shipment, editData]);
@@ -64,6 +153,7 @@ const ShipmentModal = ({
             origin_lat: location.lat,
             origin_lng: location.lng
         }));
+        setShowOriginMap(false);
     };
 
     const handleSelectDestinationLocation = (location) => {
@@ -73,13 +163,27 @@ const ShipmentModal = ({
             destination_lat: location.lat,
             destination_lng: location.lng
         }));
+        setShowDestinationMap(false);
     };
 
     const handleItemChange = (index, field, value) => {
-        const updatedItems = editData.items.map((item, i) =>
-            i === index ? { ...item, [field]: field === 'description' ? value : Number(value) } : item
-        );
+        // Crear una copia profunda del array
+        const updatedItems = JSON.parse(JSON.stringify(editData.items || []));
 
+        // Asegurarse de que el elemento existe
+        if (!updatedItems[index]) {
+            updatedItems[index] = { description: '', quantity: 1, weight: 0, value: 0 };
+        }
+
+        // Actualizar el campo específico
+        if (field === 'description') {
+            updatedItems[index][field] = value;
+        } else {
+            // Para campos numéricos, asegurar que son números válidos
+            updatedItems[index][field] = value === '' ? 0 : Number(value) || 0;
+        }
+
+        // Actualizar el estado con el nuevo array
         setEditData(prev => ({
             ...prev,
             items: updatedItems
@@ -90,7 +194,7 @@ const ShipmentModal = ({
         const newItem = { description: '', quantity: 1, weight: 0, value: 0 };
         setEditData(prev => ({
             ...prev,
-            items: [...prev.items, newItem]
+            items: [...(prev.items || []), newItem]
         }));
     };
 
@@ -122,23 +226,27 @@ const ShipmentModal = ({
             setUploadingId(shipment.id);
             setSuccessMessage('Subiendo documento…');
 
-            const response = await shipmentsService.uploadShipmentDocument(
-                shipment.id,
-                formData
-            );
+            // Usar el servicio existente
+            const response = await shipmentsService.uploadShipmentDocument(shipment.id, formData);
 
-            if (!response || !response.ok) throw new Error('Error al subir documento');
+            if (response && response.ok) {
+                setSuccessMessage('Documento subido correctamente');
 
-            // Cachear los ítems actuales para no perderlos
-            const cachedItems = editData.items;
+                // Actualizar primero la lista global
+                await refreshShipments();
 
-            // Actualizar la lista global de envíos
-            await refreshShipments();
-
-            // Actualizar específicamente los documentos de este envío
-            await refreshDocumentsList(shipment.id, setEditData);
-
-            setSuccessMessage('Documento subido correctamente');
+                // Luego cargar nuevamente este envío específico para actualizar documentos
+                const updatedShipment = await shipmentsService.getShipment(shipment.id);
+                if (updatedShipment && updatedShipment.ok) {
+                    // Actualizar solo los documentos
+                    setEditData(prev => ({
+                        ...prev,
+                        documents: updatedShipment.data.documents || []
+                    }));
+                }
+            } else {
+                throw new Error('Error al subir documento');
+            }
         } catch (err) {
             console.error('handleFileUpload:', err);
             setSuccessMessage(
@@ -146,6 +254,8 @@ const ShipmentModal = ({
             );
         } finally {
             setUploadingId(null);
+            // Limpiar el input de archivo
+            e.target.value = '';
         }
     };
 
@@ -159,14 +269,19 @@ const ShipmentModal = ({
                 if (response && response.ok) {
                     setSuccessMessage('Documento eliminado correctamente');
 
-                    // Actualizar los datos en el estado global
+                    // Actualizar la lista global
                     await refreshShipments();
 
-                    // Actualizar específicamente la lista de documentos
-                    await refreshDocumentsList(shipment.id, setEditData);
-
-                    // Si no se actualizó correctamente, usar el fallback
-                    if (!editData.documents) {
+                    // Luego volver a cargar los datos de este envío
+                    const updatedShipment = await shipmentsService.getShipment(shipment.id);
+                    if (updatedShipment && updatedShipment.ok) {
+                        // Actualizar solo los documentos
+                        setEditData(prev => ({
+                            ...prev,
+                            documents: updatedShipment.data.documents || []
+                        }));
+                    } else {
+                        // Fallback: Actualizar localmente eliminando el documento
                         setEditData(prev => ({
                             ...prev,
                             documents: (prev.documents || []).filter(doc => doc.id !== documentId)
@@ -184,43 +299,46 @@ const ShipmentModal = ({
 
     const handleSaveChanges = async () => {
         try {
+            setIsLoading(true);
+
             if (!editData.origin_address || !editData.destination_address) {
                 setSuccessMessage('Las direcciones de origen y destino son obligatorias');
+                setIsLoading(false);
                 return;
             }
 
             // Calcular total de los items
             const totalItemsValue = editData.items.reduce((total, item) => {
-                return total + (item.value || 0) * (item.quantity || 1);
+                return total + (Number(item.value) || 0) * (Number(item.quantity) || 1);
             }, 0);
 
             // Filtrar items vacíos
             const filteredItems = editData.items.filter(item =>
                 item.description?.trim() !== '' ||
-                item.quantity > 0 ||
-                item.weight > 0 ||
-                item.value > 0
+                Number(item.quantity) > 0 ||
+                Number(item.weight) > 0 ||
+                Number(item.value) > 0
             );
 
             const dataToSend = {
                 ...editData,
                 items: filteredItems,
                 shipping_cost: totalItemsValue,
-                origin_lat: String(editData.origin_lat),
-                origin_lng: String(editData.origin_lng),
-                destination_lat: String(editData.destination_lat),
-                destination_lng: String(editData.destination_lng),
+                origin_lat: String(editData.origin_lat || 0),
+                origin_lng: String(editData.origin_lng || 0),
+                destination_lat: String(editData.destination_lat || 0),
+                destination_lng: String(editData.destination_lng || 0),
                 admin_override: userRole === 'admin' ? true : undefined
             };
 
             setSuccessMessage('Guardando cambios...');
 
-            const response = await shipmentsService.updateShipment(editData.id, dataToSend);
+            const response = await api.put(`/shipment/${editData.id}`, dataToSend);
 
-            if (response && (response.ok || response.status === 200)) {
+            if (response) {
                 setSuccessMessage('Envío actualizado correctamente');
                 await refreshShipments();
-                await reloadShipmentData(shipment.id, setEditData, shipmentsService);
+                await reloadShipmentData(shipment.id);
                 setIsEditing(false);
             } else {
                 throw new Error('Error al actualizar envío');
@@ -228,6 +346,8 @@ const ShipmentModal = ({
         } catch (error) {
             console.error('Error al actualizar envío:', error);
             setSuccessMessage('Error al actualizar envío: ' + (error.message || 'Error desconocido'));
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -257,6 +377,13 @@ const ShipmentModal = ({
                     setActiveTab={setActiveTab}
                     editData={editData}
                 />
+
+                {/* Loader overlay */}
+                {isLoading && (
+                    <div className="absolute inset-0 bg-white/75 z-10 flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                    </div>
+                )}
 
                 {/* Content Area */}
                 <div className="flex-1 overflow-y-auto p-6">
