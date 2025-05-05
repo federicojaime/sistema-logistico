@@ -1,21 +1,23 @@
+// ShipmentList.jsx
 import React, { useState, useEffect, useMemo } from 'react';
-import {
-  Search, Plus, Eye, FileText, Trash2, Filter, X, Upload, Check,
-  AlertCircle, Package, Download, Edit, Save, MapPin, DollarSign, Camera,
-  Calendar, ArrowUpDown, RefreshCw
-} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useShipments } from '../contexts/ShipmentsContext';
 import { useAuth } from '../contexts/AuthContext';
+import { Alert, AlertDescription } from './ui/alert';
+import { AlertCircle, Check, Package } from 'lucide-react';
 import ShipmentModal from './shipment-modal/ShipmentModal';
 import InvoiceModal from './InvoiceModal';
-import ShipmentFilters from './ShipmentFilters';
-import ShipmentListItem from './ShipmentListItem';
-import { Alert, AlertDescription } from './ui/alert';
-import SimpleMapModal from './SimpleMapModal';
 import CameraPODCapture from './CameraPODCapture';
-import { statusMap, reverseStatusMap, statusColors, sortShipments } from '../utils/shipmentUtils';
+import { statusMap, statusColors, sortShipments } from '../utils/shipmentUtils';
 import api from '../services/api';
+
+// Componentes modulares
+import BasicFilters from './BasicFilters';
+import AdvancedFilters from './AdvancedFilters';
+import ShipmentTable from './ShipmentTable';
+import Pagination from './Pagination';
+import EmptyState from './EmptyState';
+import HeaderControls from './HeaderControls';
 
 export function ShipmentList() {
   const navigate = useNavigate();
@@ -25,7 +27,6 @@ export function ShipmentList() {
     loading,
     error,
     refreshShipments,
-    updateShipment,
     deleteShipment
   } = useShipments();
 
@@ -34,6 +35,7 @@ export function ShipmentList() {
   const [selectedStatus, setSelectedStatus] = useState(user.role === 'transportista' ? 'Pendiente' : 'todos');
   const [selectedDriver, setSelectedDriver] = useState('todos');
   const [dateRange, setDateRange] = useState({ startDate: '', endDate: '' });
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   // State for modals and data
   const [modalData, setModalData] = useState(null);
@@ -47,12 +49,13 @@ export function ShipmentList() {
   const [sortField, setSortField] = useState('id');
   const [sortDirection, setSortDirection] = useState('desc');
 
+  // State for pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+
   // State for data loading
   const [transportistas, setTransportistas] = useState([]);
   const [loadingTransportistas, setLoadingTransportistas] = useState(false);
-
-  // Debug state para problemas de filtrado
-  const [debugInfo, setDebugInfo] = useState(null);
 
   // Resetear todos los filtros
   const resetAllFilters = () => {
@@ -62,6 +65,7 @@ export function ShipmentList() {
     setDateRange({ startDate: '', endDate: '' });
     setSortField('id');
     setSortDirection('desc');
+    setCurrentPage(1);
     setSuccessMessage('Filtros restablecidos');
   };
 
@@ -73,6 +77,7 @@ export function ShipmentList() {
       setSortField(field);
       setSortDirection('asc');
     }
+    setCurrentPage(1); // Volver a la primera página cuando se cambia el ordenamiento
   };
 
   // Efecto para limpiar mensajes de éxito después de un tiempo
@@ -121,7 +126,7 @@ export function ShipmentList() {
 
         // Añadir la opción "Sin Transportista" al principio de la lista
         transportistasData.unshift({
-          id: "99999", // Cambiado a string para evitar conflictos
+          id: "99999",
           enviosPendientes: 0,
           name: "Sin Transportista",
           displayName: "Sin Transportista (0 envíos pendientes)",
@@ -137,6 +142,11 @@ export function ShipmentList() {
 
     cargarTransportistas();
   }, [user.role]);
+
+  // Cuando se cambian los filtros, resetear a la página 1
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedStatus, selectedDriver, dateRange]);
 
   // Manejar la captura del PDF desde la cámara
   const handlePDFCapture = async (pdfFile) => {
@@ -242,34 +252,10 @@ export function ShipmentList() {
     // Asegurarse que shipments es un array
     if (!Array.isArray(shipments)) return [];
 
-    // Información de depuración
-    let debugData = {
-      totalShipments: shipments.length,
-      filteredBy: {
-        searchQuery,
-        status: selectedStatus,
-        driver: selectedDriver,
-        dateRange
-      },
-      passedFilters: 0,
-      driverFilters: []
-    };
-
     // Primero filtrar
     const filtered = shipments.filter((shipment) => {
       // Verificar que shipment tenga todas las propiedades necesarias
       if (!shipment) return false;
-
-      // Para depuración
-      let filterInfo = {
-        id: shipment.id,
-        driver_id: shipment.driver_id,
-        status: shipment.status,
-        matchesSearch: false,
-        matchesStatus: false,
-        matchesDriver: false,
-        matchesDate: false
-      };
 
       const matchesSearch =
         searchQuery === '' ||
@@ -277,47 +263,27 @@ export function ShipmentList() {
         (shipment.destination_address && shipment.destination_address.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (shipment.ref_code && shipment.ref_code.toLowerCase().includes(searchQuery.toLowerCase()));
 
-      filterInfo.matchesSearch = matchesSearch;
-
       const matchesStatus =
         selectedStatus === 'todos' ||
         (shipment.status && statusMap[shipment.status] === selectedStatus);
 
-      filterInfo.matchesStatus = matchesStatus;
-
-      // Corregido para manejar correctamente el filtro de transportista - CON LOGS
+      // Filtro por transportista
       let matchesDriver = true;
 
       if (user.role === 'transportista') {
         // Si es transportista, solo mostrar sus envíos asignados
         matchesDriver = shipment.driver_id === user.id;
-        filterInfo.matchesDriver = matchesDriver;
-        filterInfo.driverFilterType = 'transportista';
       } else if (selectedDriver !== 'todos') {
         // Para admin/cliente con filtro seleccionado
         if (selectedDriver === '99999') {
           // Caso especial para "Sin transportista"
           matchesDriver = !shipment.driver_id;
-          filterInfo.matchesDriver = matchesDriver;
-          filterInfo.driverFilterType = 'sin_transportista';
         } else {
-          // Convertir IDs a string para comparación segura (algunos pueden ser numéricos y otros string)
+          // Convertir IDs a string para comparación segura
           const shipmentDriverId = String(shipment.driver_id || '');
           const selectedDriverId = String(selectedDriver || '');
-
-          // Coincidencia con ID de transportista específico
           matchesDriver = shipmentDriverId === selectedDriverId;
-          filterInfo.matchesDriver = matchesDriver;
-          filterInfo.driverFilterType = 'transportista_especifico';
-          filterInfo.comparison = {
-            shipmentDriverId,
-            selectedDriverId,
-            equal: shipmentDriverId === selectedDriverId
-          };
         }
-      } else {
-        filterInfo.matchesDriver = true;
-        filterInfo.driverFilterType = 'todos';
       }
 
       // Filtro por fecha
@@ -325,10 +291,7 @@ export function ShipmentList() {
       if (dateRange.startDate) {
         const shipmentDate = new Date(shipment.created_at);
         const startDate = new Date(dateRange.startDate);
-
-        // Ajustar para incluir todo el día de inicio
         startDate.setHours(0, 0, 0, 0);
-
         if (shipmentDate < startDate) {
           matchesDate = false;
         }
@@ -337,31 +300,14 @@ export function ShipmentList() {
       if (dateRange.endDate && matchesDate) {
         const shipmentDate = new Date(shipment.created_at);
         const endDate = new Date(dateRange.endDate);
-
-        // Ajustar para incluir todo el día final
         endDate.setHours(23, 59, 59, 999);
-
         if (shipmentDate > endDate) {
           matchesDate = false;
         }
       }
 
-      filterInfo.matchesDate = matchesDate;
-
-      // Para depuración: guardar el resultado de este envío
-      if (matchesSearch && matchesStatus && matchesDriver && matchesDate) {
-        debugData.passedFilters++;
-      }
-
-      debugData.driverFilters.push(filterInfo);
-
       return matchesSearch && matchesStatus && matchesDriver && matchesDate;
     });
-
-    // Actualizar información de depuración
-    debugData.filteredCount = filtered.length;
-    // console.log('DEBUG - Filtrado de Envíos:', debugData);
-    setDebugInfo(debugData);
 
     // Luego ordenar (primero por usuario)
     let sorted = sortShipments(filtered, user.role === 'transportista');
@@ -403,6 +349,15 @@ export function ShipmentList() {
     return sorted;
   }, [shipments, searchQuery, selectedStatus, selectedDriver, dateRange, user, sortField, sortDirection]);
 
+  // Calcular la paginación
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredAndSortedShipments.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredAndSortedShipments.length / itemsPerPage);
+
+  // Cambiar página
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
   // Mostrar spinner durante la carga inicial
   if (loading && (!shipments || shipments.length === 0)) {
     return (
@@ -413,34 +368,13 @@ export function ShipmentList() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
+    <div className="container mx-auto py-6 px-4">
       {/* Header y Controles */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-        <h2 className="text-2xl font-bold text-gray-800">Lista de Envíos</h2>
-
-        <div className="flex gap-2">
-          <button
-            onClick={resetAllFilters}
-            className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300
-                     flex items-center gap-2 transition-colors"
-            title="Restablecer todos los filtros"
-          >
-            <RefreshCw className="w-5 h-5" />
-            Limpiar Filtros
-          </button>
-
-          {user.role === 'admin' && (
-            <button
-              onClick={() => navigate('/logistica/crear-envio')}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 
-                       flex items-center gap-2 transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-              Crear Envío
-            </button>
-          )}
-        </div>
-      </div>
+      <HeaderControls 
+        resetAllFilters={resetAllFilters}
+        userRole={user.role}
+        onCreateShipment={() => navigate('/logistica/crear-envio')}
+      />
 
       {/* Mensajes de error y éxito */}
       {error && (
@@ -457,131 +391,62 @@ export function ShipmentList() {
         </Alert>
       )}
 
-      {/* Info de depuración (solo en desarrollo) 
-      {process.env.NODE_ENV === 'development' && debugInfo && (
-        <div className="mb-4 p-4 bg-gray-100 rounded-lg text-xs">
-          <details>
-            <summary className="cursor-pointer font-semibold text-blue-600">
-              Información de depuración (filtrado): {debugInfo.passedFilters} de {debugInfo.totalShipments} resultados
-            </summary>
-            <pre className="mt-2 overflow-auto max-h-40">
-              {JSON.stringify(debugInfo, null, 2)}
-            </pre>
-          </details>
-        </div>
-      )}*/}
-      {/* Filtros */}
-      <ShipmentFilters
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        selectedStatus={selectedStatus}
-        setSelectedStatus={setSelectedStatus}
-        selectedDriver={selectedDriver}
-        setSelectedDriver={setSelectedDriver}
-        dateRange={dateRange}
-        setDateRange={setDateRange}
-        transportistas={transportistas}
-        loadingTransportistas={loadingTransportistas}
-        userRole={user.role}
-      />
+      {/* Contenedor de filtros con sombra y borde */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+        {/* Filtros básicos */}
+        <BasicFilters
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          selectedStatus={selectedStatus}
+          setSelectedStatus={setSelectedStatus}
+          showAdvanced={showAdvancedFilters}
+          setShowAdvanced={setShowAdvancedFilters}
+          statusMap={statusMap}
+        />
+
+        {/* Filtros avanzados (condicional) */}
+        {showAdvancedFilters && (
+          <AdvancedFilters
+            dateRange={dateRange}
+            setDateRange={setDateRange}
+            selectedDriver={selectedDriver}
+            setSelectedDriver={setSelectedDriver}
+            transportistas={transportistas}
+            userRole={user.role}
+          />
+        )}
+      </div>
 
       {/* Lista de Envíos */}
       {filteredAndSortedShipments.length === 0 ? (
-        <div className="bg-white rounded-lg shadow p-8 text-center">
-          <div className="mb-4">
-            <Package className="h-16 w-16 mx-auto text-gray-400" />
-          </div>
-          <h3 className="text-xl font-semibold text-gray-700 mb-2">
-            No hay envíos para mostrar
-          </h3>
-          <p className="text-gray-500">
-            {user.role === 'transportista'
-              ? 'Actualmente no tienes envíos asignados.'
-              : 'No se encontraron envíos con los filtros seleccionados.'}
-          </p>
-        </div>
+        <EmptyState userRole={user.role} />
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer"
-                    onClick={() => toggleSort('status')}
-                  >
-                    <div className="flex items-center gap-1">
-                      Estado
-                      <ArrowUpDown className="h-4 w-4" />
-                    </div>
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Referencia
-                  </th>
-                  <th
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer"
-                    onClick={() => toggleSort('customer')}
-                  >
-                    <div className="flex items-center gap-1">
-                      Cliente
-                      <ArrowUpDown className="h-4 w-4" />
-                    </div>
-                  </th>
-                  <th
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer"
-                    onClick={() => toggleSort('destination')}
-                  >
-                    <div className="flex items-center gap-1">
-                      Destino
-                      <ArrowUpDown className="h-4 w-4" />
-                    </div>
-                  </th>
-                  <th
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer"
-                    onClick={() => toggleSort('date')}
-                  >
-                    <div className="flex items-center gap-1">
-                      Fecha
-                      <ArrowUpDown className="h-4 w-4" />
-                    </div>
-                  </th>
-                  {(user.role === 'admin' || user.role === 'cliente') && (
-                    <th
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer"
-                      onClick={() => toggleSort('driver')}
-                    >
-                      <div className="flex items-center gap-1">
-                        Transportista
-                        <ArrowUpDown className="h-4 w-4" />
-                      </div>
-                    </th>
-                  )}
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredAndSortedShipments.map((shipment) => (
-                  <ShipmentListItem
-                    key={shipment.id}
-                    shipment={shipment}
-                    userRole={user.role}
-                    userId={user.id}
-                    onViewDetails={() => setModalData(shipment)}
-                    onShowInvoice={() => setInvoiceData(shipment)}
-                    onUploadPOD={handleUploadPOD}
-                    onHandlePODUpload={handlePODUpload}
-                    onDelete={handleDelete}
-                    uploadingId={uploadingId}
-                    statusColors={statusColors}
-                    statusMap={statusMap}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <>
+          <ShipmentTable 
+            shipments={currentItems}
+            sortField={sortField}
+            sortDirection={sortDirection}
+            toggleSort={toggleSort}
+            onViewDetails={(shipment) => setModalData(shipment)}
+            onShowInvoice={(shipment) => setInvoiceData(shipment)}
+            onUploadPOD={handleUploadPOD}
+            onDelete={handleDelete}
+            uploadingId={uploadingId}
+            statusColors={statusColors}
+            statusMap={statusMap}
+            userRole={user.role}
+            handlePODUpload={handlePODUpload}
+          />
+          
+          {/* Paginación */}
+          {totalPages > 1 && (
+            <Pagination 
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={paginate}
+            />
+          )}
+        </>
       )}
 
       {/* Modal de Detalles */}
@@ -598,7 +463,7 @@ export function ShipmentList() {
         />
       )}
 
-      {/* Modal de Factura - Solo muestra cuando el estado es entregado */}
+      {/* Modal de Factura */}
       {invoiceData && (
         <InvoiceModal
           shipment={invoiceData}
