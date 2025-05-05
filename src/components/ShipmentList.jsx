@@ -7,7 +7,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useShipments } from '../contexts/ShipmentsContext';
 import { useAuth } from '../contexts/AuthContext';
-import ShipmentModal from './ShipmentModal';
+import ShipmentModal from './shipment-modal/ShipmentModal';
 import InvoiceModal from './InvoiceModal';
 import ShipmentFilters from './ShipmentFilters';
 import ShipmentListItem from './ShipmentListItem';
