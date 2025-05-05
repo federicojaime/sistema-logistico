@@ -25,14 +25,14 @@ const ClientListFilters = ({
   };
 
   return (
-    <div className="mb-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-      {/* Búsqueda por texto */}
-      <div className="relative col-span-1">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+    <div className="space-y-3">
+      {/* Búsqueda por texto - Adaptado para móvil */}
+      <div className="relative w-full">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
         <input
           type="text"
           placeholder="Buscar por nombre o CUIT..."
-          className="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+          className="w-full pl-9 pr-9 py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 text-sm"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
@@ -41,32 +41,32 @@ const ClientListFilters = ({
             className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
             onClick={() => setSearchQuery('')}
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         )}
       </div>
 
-      {/* Filtro por estado */}
-      <div className="relative col-span-1">
+      {/* Filtro por estado - Adaptado para móvil */}
+      <div className="relative w-full">
         <div
-          className="flex items-center justify-between w-full px-3 py-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer"
+          className="flex items-center justify-between w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer"
           onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
         >
           <div className="flex items-center">
-            <Filter className="text-gray-400 w-5 h-5 mr-2" />
-            <div className={`w-3 h-3 rounded-full mr-2 ${statusIndicators[selectedStatus] || 'bg-gray-400'}`}></div>
-            <span className="text-gray-700">
+            <Filter className="text-gray-400 w-4 h-4 mr-2" />
+            <div className={`w-2.5 h-2.5 rounded-full mr-2 ${statusIndicators[selectedStatus] || 'bg-gray-400'}`}></div>
+            <span className="text-sm text-gray-700">
               {statusOptions.find(s => s.id === selectedStatus)?.name || 'Todos los estados'}
             </span>
           </div>
-          <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${statusDropdownOpen ? 'transform rotate-180' : ''}`} />
+          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${statusDropdownOpen ? 'transform rotate-180' : ''}`} />
         </div>
         
         {statusDropdownOpen && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setStatusDropdownOpen(false)}></div>
             <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
-              <ul className="py-1 max-h-60 overflow-y-auto">
+              <ul className="py-1 max-h-48 overflow-y-auto">
                 {statusOptions.map(status => (
                   <li
                     key={status.id}
@@ -76,8 +76,8 @@ const ClientListFilters = ({
                       setStatusDropdownOpen(false);
                     }}
                   >
-                    <div className={`w-3 h-3 rounded-full mr-2 ${statusIndicators[status.id]}`}></div>
-                    <span>{status.name}</span>
+                    <div className={`w-2.5 h-2.5 rounded-full mr-2 ${statusIndicators[status.id]}`}></div>
+                    <span className="text-sm">{status.name}</span>
                   </li>
                 ))}
               </ul>

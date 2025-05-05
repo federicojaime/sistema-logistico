@@ -4,19 +4,17 @@ import { Plus } from 'lucide-react';
 
 const ClientListHeader = ({ onCreateClient }) => {
   return (
-    <div className="flex flex-col md:flex-row justify-between items-center mb-5 gap-3">
-      <h1 className="text-2xl font-bold text-gray-800">Lista de Clientes</h1>
+    <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-2">
+      <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Lista de Clientes</h1>
 
-      <div className="flex gap-2">
-        <button
-          onClick={onCreateClient}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg
-                   flex items-center gap-2 transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          <span className="hidden sm:inline">Nuevo Cliente</span>
-        </button>
-      </div>
+      <button
+        onClick={onCreateClient}
+        className="w-full sm:w-auto px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg
+                 flex items-center justify-center gap-1.5 transition-colors text-sm"
+      >
+        <Plus className="w-4 h-4" />
+        <span>Nuevo Cliente</span>
+      </button>
     </div>
   );
 };

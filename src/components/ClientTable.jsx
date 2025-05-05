@@ -9,22 +9,22 @@ const ClientTable = ({ clients, onView, onEdit, onDelete }) => {
                 <table className="w-full table-fixed divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
-                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase w-1/4">
+                            <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase w-1/4">
                                 Razón Social
                             </th>
-                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase w-1/6">
+                            {/* <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase w-1/6 hidden sm:table-cell">
                                 CUIT/NIT
-                            </th>
-                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase w-1/5">
+                            </th>*/}
+                            <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase w-1/5 hidden md:table-cell">
                                 Email
                             </th>
-                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase w-1/6">
+                            <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase w-1/6 hidden sm:table-cell">
                                 Teléfono
                             </th>
-                            <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase w-1/12">
+                            <th className="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase w-1/12">
                                 Estado
                             </th>
-                            <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase w-1/8">
+                            <th className="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase w-1/8">
                                 Acciones
                             </th>
                         </tr>
@@ -32,22 +32,22 @@ const ClientTable = ({ clients, onView, onEdit, onDelete }) => {
                     <tbody className="bg-white divide-y divide-gray-200">
                         {clients.map((client) => (
                             <tr key={client.id} className="hover:bg-gray-50 transition-colors">
-                                <td className="px-3 py-2 truncate">
-                                    <span className="text-sm font-medium text-gray-900">
+                                <td className="px-2 py-2 truncate">
+                                    <span className="text-xs sm:text-sm font-medium text-gray-900">
                                         {client.business_name}
                                     </span>
                                 </td>
-                                <td className="px-3 py-2 text-sm text-gray-500 truncate">
+                                {/** <td className="px-2 py-2 text-xs sm:text-sm text-gray-500 truncate hidden sm:table-cell">
                                     {client.tax_id}
-                                </td>
-                                <td className="px-3 py-2 text-sm text-gray-500 truncate">
+                                </td>*/}
+                                <td className="px-2 py-2 text-xs sm:text-sm text-gray-500 truncate hidden md:table-cell">
                                     {client.email}
                                 </td>
-                                <td className="px-3 py-2 text-sm text-gray-500 truncate">
+                                <td className="px-2 py-2 text-xs sm:text-sm text-gray-500 truncate hidden sm:table-cell">
                                     {client.phone}
                                 </td>
-                                <td className="px-3 py-2 text-center">
-                                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium
+                                <td className="px-2 py-2 text-center">
+                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium
                     ${client.status === 'active'
                                             ? 'bg-green-100 text-green-800'
                                             : 'bg-red-100 text-red-800'}`}
@@ -55,14 +55,14 @@ const ClientTable = ({ clients, onView, onEdit, onDelete }) => {
                                         {client.status === 'active' ? 'Activo' : 'Inactivo'}
                                     </span>
                                 </td>
-                                <td className="px-3 py-2 text-center">
-                                    <div className="flex justify-center items-center space-x-2">
+                                <td className="px-2 py-2 text-center">
+                                    <div className="flex justify-center items-center space-x-1">
                                         <button
                                             onClick={() => onView(client)}
                                             className="text-gray-500 hover:text-blue-600 transition-colors p-1 rounded-full hover:bg-blue-50"
                                             title="Ver detalles"
                                         >
-                                            <Eye className="w-4 h-4" />
+                                            <Eye className="w-3.5 h-3.5" />
                                         </button>
 
                                         <button
@@ -70,7 +70,7 @@ const ClientTable = ({ clients, onView, onEdit, onDelete }) => {
                                             className="text-gray-500 hover:text-blue-600 transition-colors p-1 rounded-full hover:bg-blue-50"
                                             title="Editar"
                                         >
-                                            <Edit className="w-4 h-4" />
+                                            <Edit className="w-3.5 h-3.5" />
                                         </button>
 
                                         <button
@@ -78,7 +78,7 @@ const ClientTable = ({ clients, onView, onEdit, onDelete }) => {
                                             className="text-gray-500 hover:text-red-600 transition-colors p-1 rounded-full hover:bg-red-50"
                                             title="Eliminar"
                                         >
-                                            <Trash2 className="w-4 h-4" />
+                                            <Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                     </div>
                                 </td>

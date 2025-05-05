@@ -1,6 +1,6 @@
 // ShipmentTable.jsx
 import React from 'react';
-import { Eye, FileText, Trash2, Upload, ArrowUpDown } from 'lucide-react';
+import { Eye, FileText, Trash2, Upload, ArrowUpDown, Info } from 'lucide-react';
 
 const ShipmentTable = ({
     shipments,
@@ -17,6 +17,30 @@ const ShipmentTable = ({
     userRole,
     handlePODUpload
 }) => {
+    // Función para formatear la dirección de destino
+    const formatDestination = (address) => {
+        if (!address) return '';
+        
+        // Buscar si la dirección contiene "Florida" o algún estado/código postal
+        const floridaIndex = address.indexOf('Florida');
+        if (floridaIndex >= 0) {
+            // Obtener la parte desde "Florida" en adelante
+            const shortAddress = address.substring(floridaIndex);
+            return (
+                <div className="relative inline-flex items-center group">
+                    <span>{shortAddress}</span>
+                    <Info className="h-4 w-4 ml-1 text-gray-400" />
+                    <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-black text-white p-3 rounded-lg text-sm  z-10 shadow-lg border border-gray-200">
+                        {address}
+                    </div>
+                </div>
+            );
+        }
+        
+        // Si no encuentra "Florida", mostrar la versión truncada como antes
+        return address.length > 30 ? `${address.substring(0, 30)}...` : address;
+    };
+
     return (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             <div className="overflow-x-auto">
@@ -95,9 +119,7 @@ const ShipmentTable = ({
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    {shipment.destination_address && shipment.destination_address.length > 30
-                                        ? `${shipment.destination_address.substring(0, 30)}...`
-                                        : shipment.destination_address}
+                                    {formatDestination(shipment.destination_address)}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                     {new Date(shipment.created_at).toLocaleDateString()}
