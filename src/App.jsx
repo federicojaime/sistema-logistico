@@ -1,3 +1,4 @@
+// src/App.jsx (modificado para incluir la nueva ruta)
 import React from 'react';
 import {
   BrowserRouter,
@@ -9,12 +10,12 @@ import {
 // Componentes
 import { Login } from './components/Login';
 import { ShipmentList } from './components/ShipmentList';
-import { CreateShipment } from './components/CreateShipment';
 import { UserManagement } from './components/UserManagement';
 import { Invoices } from './components/Invoices';
 import { NavBar } from './components/NavBar';
 import { ClientList } from './components/ClientList';
 import { AccountantShipmentList } from './components/AccountantShipmentList';
+import ShipmentCreationForm from './components/shipment-creation'; // Importación del nuevo componente
 
 // Contextos
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -87,7 +88,7 @@ const AppRoutes = () => {
           path="/logistica/crear-envio"
           element={
             <PrivateRoute allowedRoles={['admin']}>
-              <CreateShipment />
+              <ShipmentCreationForm />
             </PrivateRoute>
           }
         />
