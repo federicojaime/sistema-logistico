@@ -54,7 +54,7 @@ export const authService = {
             return null;
         }
     },
-    
+
     getUsers: async () => {
         try {
             return await api.get('/users');
@@ -69,7 +69,7 @@ export const authService = {
             return await api.post('/user', userData);
         } catch (error) {
             console.error('Error al crear usuario:', error);
-            throw error;
+            return error.response?.data || error;
         }
     },
 
@@ -78,7 +78,7 @@ export const authService = {
             return await api.patch(`/user/${id}`, userData);
         } catch (error) {
             console.error('Error al actualizar usuario:', error);
-            throw error;
+            return error.response?.data || error;
         }
     },
 
