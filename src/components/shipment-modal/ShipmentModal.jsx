@@ -28,55 +28,6 @@ const ShipmentModal = ({
     const [activeTab, setActiveTab] = useState('details');
     const [isLoading, setIsLoading] = useState(false);
 
-    // Formatear URL del documento correctamente
-    const formatDocumentUrl = useCallback((documentPath) => {
-        if (!documentPath) return '#';
-
-        // Si la ruta ya tiene http, es una URL completa
-        if (documentPath.startsWith('http')) {
-            return documentPath;
-        }
-
-        // Si la ruta comienza con / o no, asegurarse de que se forme bien la URL
-        const baseUrl = import.meta.env.VITE_API_URL;
-        const path = documentPath.startsWith('/') ? documentPath.substring(1) : documentPath;
-
-        return `${baseUrl}/${path}`;
-    }, []);
-
-    // Cargar documentos actualizados
-    const refreshDocumentsList = useCallback(async (shipmentId) => {
-        try {
-            setIsLoading(true);
-
-            // Hacer una solicitud separada para obtener los documentos más recientes
-            const response = await api.get(`/shipment/${shipmentId}/documents`);
-
-            if (response && Array.isArray(response)) {
-                // Formatear correctamente los documentos recibidos
-                const formattedDocuments = response.map(doc => ({
-                    ...doc,
-                    file_content: doc.file_content || doc.path || doc.url || ''
-                }));
-
-                // Actualizar solo los documentos en el estado, manteniendo el resto de datos
-                setEditData(prev => ({
-                    ...prev,
-                    documents: formattedDocuments
-                }));
-
-                return formattedDocuments;
-            }
-
-            return null;
-        } catch (error) {
-            console.error('Error al actualizar lista de documentos:', error);
-            return null;
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
-
     // Recargar datos completos del envío
     const reloadShipmentData = useCallback(async (shipmentId) => {
         if (!shipmentId) return null;
@@ -121,6 +72,9 @@ const ShipmentModal = ({
                 ...shipment,
                 items: shipment.items && Array.isArray(shipment.items)
                     ? [...shipment.items]
+                    : [],
+                documents: shipment.documents && Array.isArray(shipment.documents)
+                    ? [...shipment.documents]
                     : []
             });
         }
@@ -147,6 +101,7 @@ const ShipmentModal = ({
     };
 
     const handleSelectOriginLocation = (location) => {
+        console.log("Ubicación de origen seleccionada:", location);
         setEditData(prev => ({
             ...prev,
             origin_address: location.address,
@@ -157,6 +112,7 @@ const ShipmentModal = ({
     };
 
     const handleSelectDestinationLocation = (location) => {
+        console.log("Ubicación de destino seleccionada:", location);
         setEditData(prev => ({
             ...prev,
             destination_address: location.address,
@@ -308,12 +264,12 @@ const ShipmentModal = ({
             }
 
             // Calcular total de los items
-            const totalItemsValue = editData.items.reduce((total, item) => {
+            const totalItemsValue = (editData.items || []).reduce((total, item) => {
                 return total + (Number(item.value) || 0) * (Number(item.quantity) || 1);
             }, 0);
 
             // Filtrar items vacíos
-            const filteredItems = editData.items.filter(item =>
+            const filteredItems = (editData.items || []).filter(item =>
                 item.description?.trim() !== '' ||
                 Number(item.quantity) > 0 ||
                 Number(item.weight) > 0 ||
@@ -349,6 +305,22 @@ const ShipmentModal = ({
         } finally {
             setIsLoading(false);
         }
+    };
+
+    // Función para formatear URL del documento
+    const formatDocumentUrl = (documentPath) => {
+        if (!documentPath) return '#';
+
+        // Si la ruta ya tiene http, es una URL completa
+        if (documentPath.startsWith('http')) {
+            return documentPath;
+        }
+
+        // Si la ruta comienza con / o no, asegurarse de que se forme bien la URL
+        const baseUrl = import.meta.env.VITE_API_URL;
+        const path = documentPath.startsWith('/') ? documentPath.substring(1) : documentPath;
+
+        return `${baseUrl}/${path}`;
     };
 
     if (!shipment) return null;
@@ -439,7 +411,7 @@ const ShipmentModal = ({
                             onClose={() => setShowOriginMap(false)}
                             onSelectLocation={handleSelectOriginLocation}
                             initialAddress={{
-                                address: editData.origin_address,
+                                address: editData.origin_address || '',
                                 lat: editData.origin_lat || null,
                                 lng: editData.origin_lng || null
                             }}
@@ -450,7 +422,7 @@ const ShipmentModal = ({
                             onClose={() => setShowDestinationMap(false)}
                             onSelectLocation={handleSelectDestinationLocation}
                             initialAddress={{
-                                address: editData.destination_address,
+                                address: editData.destination_address || '',
                                 lat: editData.destination_lat || null,
                                 lng: editData.destination_lng || null
                             }}

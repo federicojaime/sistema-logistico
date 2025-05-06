@@ -21,6 +21,7 @@ L.Marker.prototype.options.icon = DefaultIcon;
 // Función de geocodificación usando Nominatim
 const geocodeAddress = async (address) => {
   try {
+    console.log("Geocodificando dirección:", address);
     const response = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
       {
@@ -36,6 +37,7 @@ const geocodeAddress = async (address) => {
     }
     
     const data = await response.json();
+    console.log("Resultados geocodificación:", data);
     
     if (data && data.length > 0) {
       return {
@@ -55,6 +57,7 @@ const geocodeAddress = async (address) => {
 // Función de geocodificación inversa
 const reverseGeocode = async (lat, lng) => {
   try {
+    console.log("Geocodificación inversa para:", lat, lng);
     const response = await fetch(
       `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
       {
@@ -70,6 +73,7 @@ const reverseGeocode = async (lat, lng) => {
     }
     
     const data = await response.json();
+    console.log("Resultados geocodificación inversa:", data);
     
     if (data && data.display_name) {
       return data.display_name;
@@ -90,26 +94,61 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
     address: ''
   };
   
-  // Usar initialLocation si se proporciona
-  const initialPos = initialLocation || DEFAULT_LOCATION;
+  // Usar initialLocation si es válido, o DEFAULT_LOCATION
+  let initialPos = DEFAULT_LOCATION;
+  if (initialLocation) {
+    // Verificar que los valores lat y lng sean números válidos
+    const validLat = initialLocation.lat !== undefined && 
+                    initialLocation.lat !== null && 
+                    !isNaN(Number(initialLocation.lat));
+    
+    const validLng = initialLocation.lng !== undefined && 
+                    initialLocation.lng !== null && 
+                    !isNaN(Number(initialLocation.lng));
+    
+    if (validLat && validLng) {
+      initialPos = {
+        lat: Number(initialLocation.lat),
+        lng: Number(initialLocation.lng),
+        address: initialLocation.address || ''
+      };
+    } else if (initialLocation.address) {
+      // Si solo tenemos dirección pero no coordenadas válidas
+      initialPos = {
+        ...DEFAULT_LOCATION,
+        address: initialLocation.address
+      };
+    }
+  }
+  
+  console.log("Initial position after validation:", initialPos);
   
   const [position, setPosition] = useState({
-    lat: initialPos.lat || DEFAULT_LOCATION.lat,
-    lng: initialPos.lng || DEFAULT_LOCATION.lng
+    lat: initialPos.lat,
+    lng: initialPos.lng
   });
   const [address, setAddress] = useState(initialPos.address || '');
-  const [searchText, setSearchText] = useState('');
+  const [searchText, setSearchText] = useState(initialPos.address || '');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const mapContainerId = `map-${Date.now()}`;
-  
+
   // Inicializar el mapa
   useEffect(() => {
-    // Crear mapa
+    console.log("Inicializando mapa con:", position);
+    
+    // Verificar que el contenedor existe
+    const container = document.getElementById(mapContainerId);
+    if (!container) {
+      console.error(`El contenedor con ID ${mapContainerId} no existe`);
+      return;
+    }
+    
     try {
+      // Crear mapa
       const map = L.map(mapContainerId).setView([position.lat, position.lng], 13);
       mapRef.current = map;
       
@@ -131,12 +170,15 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
           const addressResult = await reverseGeocode(pos.lat, pos.lng);
           if (addressResult) {
             setAddress(addressResult);
+            setSearchText(addressResult);
           } else {
             setAddress(`${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`);
+            setSearchText(`${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`);
           }
         } catch (err) {
           console.error('Error en geocodificación inversa:', err);
           setAddress(`${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`);
+          setSearchText(`${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`);
         }
       });
       
@@ -150,12 +192,15 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
           const addressResult = await reverseGeocode(pos.lat, pos.lng);
           if (addressResult) {
             setAddress(addressResult);
+            setSearchText(addressResult);
           } else {
             setAddress(`${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`);
+            setSearchText(`${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`);
           }
         } catch (err) {
           console.error('Error en geocodificación inversa:', err);
           setAddress(`${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`);
+          setSearchText(`${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`);
         }
       });
       
@@ -166,9 +211,26 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
             const addressResult = await reverseGeocode(initialPos.lat, initialPos.lng);
             if (addressResult) {
               setAddress(addressResult);
+              setSearchText(addressResult);
             }
           } catch (err) {
             console.error('Error al obtener dirección inicial:', err);
+          }
+        })();
+      }
+      
+      // Si hay una dirección inicial pero no coordenadas, geocodificar
+      if (initialPos.address && (!initialPos.lat || !initialPos.lng)) {
+        (async () => {
+          try {
+            const result = await geocodeAddress(initialPos.address);
+            if (result) {
+              setPosition({ lat: result.lat, lng: result.lng });
+              marker.setLatLng([result.lat, result.lng]);
+              map.setView([result.lat, result.lng], 15);
+            }
+          } catch (err) {
+            console.error('Error al geocodificar dirección inicial:', err);
           }
         })();
       }
@@ -180,12 +242,13 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
     // Limpiar al desmontar
     return () => {
       if (mapRef.current) {
+        console.log("Desmontando mapa");
         mapRef.current.remove();
         mapRef.current = null;
         markerRef.current = null;
       }
     };
-  }, []);
+  }, [mapContainerId]);
   
   // Manejar búsqueda de dirección
   const handleSearch = async () => {
@@ -273,11 +336,11 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <p className="text-sm font-semibold">Latitud:</p>
-            <p className="text-sm">{position.lat.toFixed(6)}</p>
+            <p className="text-sm">{typeof position.lat === 'number' ? position.lat.toFixed(6) : 'No disponible'}</p>
           </div>
           <div>
             <p className="text-sm font-semibold">Longitud:</p>
-            <p className="text-sm">{position.lng.toFixed(6)}</p>
+            <p className="text-sm">{typeof position.lng === 'number' ? position.lng.toFixed(6) : 'No disponible'}</p>
           </div>
         </div>
         <div className="mt-2">

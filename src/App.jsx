@@ -16,6 +16,7 @@ import { NavBar } from './components/NavBar';
 import { ClientList } from './components/ClientList';
 import { AccountantShipmentList } from './components/AccountantShipmentList';
 import ShipmentCreationForm from './components/shipment-creation'; // Importación del nuevo componente
+import StatisticsDashboard from './components/StatisticsDashboard';
 
 // Contextos
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -65,6 +66,14 @@ const AppRoutes = () => {
           element={
             <PrivateRoute allowedRoles={['admin', 'transportista']}>
               <ShipmentList />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/logistica/estadisticas"
+          element={
+            <PrivateRoute allowedRoles={['admin']}>
+              <StatisticsDashboard />
             </PrivateRoute>
           }
         />

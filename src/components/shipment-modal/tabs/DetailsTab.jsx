@@ -43,7 +43,7 @@ const DetailsTab = ({
                             {isEditing ? (
                                 <input
                                     type="text"
-                                    value={editData.customer}
+                                    value={editData.customer || ''}
                                     onChange={(e) => handleEditChange('customer', e.target.value)}
                                     className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
@@ -69,7 +69,7 @@ const DetailsTab = ({
                                         </option>
                                         {transportistas && transportistas.filter && transportistas.filter(t => t.id !== "99999").map((transportista) => (
                                             <option key={transportista.id} value={transportista.id}>
-                                                {transportista.displayName}
+                                                {transportista.displayName || transportista.name || `Transportista ${transportista.id}`}
                                             </option>
                                         ))}
                                     </select>
@@ -110,17 +110,20 @@ const DetailsTab = ({
                                 </button>
                             )}
                         </div>
-                        {isEditing ? (
-                            <input
-                                type="text"
-                                value={editData.origin_address}
-                                onChange={(e) => handleEditChange('origin_address', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
-                                readOnly
-                            />
-                        ) : (
-                            <p className="text-gray-700">{shipment.origin_address}</p>
-                        )}
+                        <div className="relative">
+                            {isEditing ? (
+                                <input
+                                    type="text"
+                                    value={editData.origin_address || ''}
+                                    onChange={(e) => handleEditChange('origin_address', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                                    readOnly
+                                    placeholder="Selecciona en el mapa..."
+                                />
+                            ) : (
+                                <p className="text-gray-700">{shipment.origin_address || 'No especificada'}</p>
+                            )}
+                        </div>
                         {editData?.origin_lat && (
                             <p className="mt-2 text-xs text-gray-500">
                                 Coordenadas: {Number(editData.origin_lat).toFixed(6)}, {Number(editData.origin_lng).toFixed(6)}
@@ -146,21 +149,23 @@ const DetailsTab = ({
                                 </button>
                             )}
                         </div>
-                        {isEditing ? (
-                            <input
-                                type="text"
-                                value={editData.destination_address}
-                                onChange={(e) => handleEditChange('destination_address', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
-                                readOnly
-                            />
-                        ) : (
-                            <p className="text-gray-700">{shipment.destination_address}</p>
-                        )}
+                        <div className="relative">
+                            {isEditing ? (
+                                <input
+                                    type="text"
+                                    value={editData.destination_address || ''}
+                                    onChange={(e) => handleEditChange('destination_address', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                                    readOnly
+                                    placeholder="Selecciona en el mapa..."
+                                />
+                            ) : (
+                                <p className="text-gray-700">{shipment.destination_address || 'No especificada'}</p>
+                            )}
+                        </div>
                         {editData?.destination_lat && (
                             <p className="mt-2 text-xs text-gray-500">
-                                Coordenadas: {parseFloat(editData.destination_lat).toFixed(6)},
-                                {parseFloat(editData.destination_lng).toFixed(6)}
+                                Coordenadas: {parseFloat(editData.destination_lat).toFixed(6)}, {parseFloat(editData.destination_lng).toFixed(6)}
                             </p>
                         )}
                     </div>

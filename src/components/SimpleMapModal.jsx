@@ -1,3 +1,4 @@
+// src/components/SimpleMapModal.jsx
 import React from 'react';
 import { X } from 'lucide-react';
 import SimpleMapComponent from './SimpleMapComponent';
@@ -17,7 +18,11 @@ const SimpleMapModal = ({ isOpen, onClose, onSelectLocation, initialAddress = nu
       };
     } else if (typeof initialAddress === 'object') {
       // Si es un objeto, pasarlo directamente
-      initialLocation = initialAddress;
+      initialLocation = {
+        ...initialAddress,
+        lat: initialAddress.lat || null,
+        lng: initialAddress.lng || null
+      };
     }
   }
 

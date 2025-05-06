@@ -1,7 +1,8 @@
-// src/components/NavBar.jsx
+// En src/components/NavBar.jsx, añadir el enlace en la sección de administrador
+
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, User } from 'lucide-react';
+import { LogOut, User, BarChart2 } from 'lucide-react';
 import logo from '../assets/logo_ALS.png';
 
 export function NavBar() {
@@ -38,8 +39,11 @@ export function NavBar() {
                 </Link>
               </>
             )}
+
             {user.role === 'admin' && (
               <>
+
+
                 {/* Agregar enlace a Clientes - visible solo para administradores */}
                 <Link
                   to="/logistica/clientes"
@@ -52,6 +56,14 @@ export function NavBar() {
                   className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
                 >
                   Crear Envío
+                </Link>
+                {/* Añadir enlace a Estadísticas - visible solo para administradores */}
+                <Link
+                  to="/logistica/estadisticas"
+                  className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 flex items-center"
+                >
+                  <BarChart2 className="w-4 h-4 mr-1" />
+                  Estadísticas
                 </Link>
                 <Link
                   to="/logistica/usuarios"
