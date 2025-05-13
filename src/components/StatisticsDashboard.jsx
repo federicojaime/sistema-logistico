@@ -1,225 +1,266 @@
+// StatisticsDashboard.jsx con correcciones y logs adicionales
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
-    TrendingUp,
-    Calendar,
-    Users,
-    Truck,
-    Package,
-    DollarSign,
-    MapPin,
-    BarChart2,
-    PieChart,
-    ArrowUp,
-    ArrowDown,
-    RefreshCw,
-    FileText,
-    Clock,
-    Filter
+    BarChart2, Package, DollarSign, Users, 
+    Truck, RefreshCw, Filter, Calendar, 
+    ChevronDown, ChevronUp, Download, AlertTriangle
 } from 'lucide-react';
 import {
-    LineChart, Line, BarChart, Bar, PieChart as RechartPieChart, Pie, ResponsiveContainer,
+    BarChart, Bar, PieChart, Pie, ResponsiveContainer,
     XAxis, YAxis, CartesianGrid, Tooltip, Legend, Cell
 } from 'recharts';
-import api from '../services/api';
+import statisticsService from '../services/statisticsService';
 
-// Componente principal del Dashboard
 const StatisticsDashboard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [timeRange, setTimeRange] = useState('month'); // 'week', 'month', 'quarter', 'year'
+    const [timeRange, setTimeRange] = useState('month');
+    const [showFilters, setShowFilters] = useState(false);
     const [dashboardData, setDashboardData] = useState({
-        totals: {
-            shipments: 0,
-            clients: 0,
-            drivers: 0,
-            revenue: 0,
-            pendingShipments: 0,
-            completedShipments: 0,
-            cancelledShipments: 0,
-            transitShipments: 0
+        shipments: {
+            total: 0,
+            pending: 0,
+            inTransit: 0,
+            delivered: 0,
+            cancelled: 0
         },
-        trends: {
-            shipmentsByDate: [],
-            revenueByDate: [],
-            shipmentsByStatus: [],
-            shipmentsByDriver: [],
-            topDestinations: [],
-            topClients: []
+        clients: {
+            total: 0,
+            active: 0
         },
-        performance: {
-            avgDeliveryTime: 0,
-            onTimeDelivery: 0,
-            lateDeliveries: 0,
-            driverEfficiency: []
-        }
+        revenue: 0,
+        topClients: [],
+        topDrivers: [],
+        shipmentsByStatus: []
     });
+    const [dateRange, setDateRange] = useState({
+        from: '',
+        to: ''
+    });
+    const [filters, setFilters] = useState({
+        client_id: '',
+        driver_id: '',
+        status: ''
+    });
+    const [availableClients, setAvailableClients] = useState([]);
+    const [availableDrivers, setAvailableDrivers] = useState([]);
 
+    // Verificar permisos y cargar datos iniciales
     useEffect(() => {
-        // Comprobar si el usuario es administrador
         if (user && user.role !== 'admin') {
             navigate('/logistica/home');
             return;
         }
 
-        loadDashboardData();
-    }, [user, navigate, timeRange]);
+        calculateDateRange();
+        loadAvailableFilters();
+    }, [user, navigate]);
 
+    // Cargar datos cuando cambia el timeRange
+    useEffect(() => {
+        if (dateRange.from && dateRange.to) {
+            loadDashboardData();
+        }
+    }, [timeRange, dateRange.from, dateRange.to]);
+
+    // Calcular rango de fechas basado en el timeRange
+    const calculateDateRange = () => {
+        const today = new Date();
+        let fromDate = new Date();
+
+        switch (timeRange) {
+            case 'week':
+                fromDate.setDate(today.getDate() - 7);
+                break;
+            case 'month':
+                fromDate.setMonth(today.getMonth() - 1);
+                break;
+            case 'quarter':
+                fromDate.setMonth(today.getMonth() - 3);
+                break;
+            case 'year':
+                fromDate.setFullYear(today.getFullYear() - 1);
+                break;
+            default:
+                fromDate.setMonth(today.getMonth() - 1);
+        }
+
+        // Formatear fechas (YYYY-MM-DD)
+        const formatDate = (date) => {
+            return date.toISOString().split('T')[0];
+        };
+
+        const newDateRange = {
+            from: formatDate(fromDate),
+            to: formatDate(today)
+        };
+        
+        console.log("Rango de fechas calculado:", newDateRange);
+        setDateRange(newDateRange);
+    };
+
+    // Cargar clientes y conductores para filtros
+    const loadAvailableFilters = async () => {
+        try {
+            console.log("Cargando filtros disponibles...");
+            
+            const [clientsResponse, driversResponse] = await Promise.all([
+                statisticsService.getClientsList(),
+                statisticsService.getDriversList()
+            ]);
+
+            console.log("Respuesta de clientes:", clientsResponse);
+            console.log("Respuesta de conductores:", driversResponse);
+
+            if (clientsResponse && clientsResponse.ok) {
+                setAvailableClients(clientsResponse.data || []);
+                console.log("Clientes cargados:", clientsResponse.data);
+            } else {
+                console.warn("Error al cargar clientes:", clientsResponse);
+            }
+
+            if (driversResponse && driversResponse.ok) {
+                setAvailableDrivers(driversResponse.data || []);
+                console.log("Conductores cargados:", driversResponse.data);
+            } else {
+                console.warn("Error al cargar conductores:", driversResponse);
+            }
+        } catch (err) {
+            console.error('Error al cargar filtros:', err);
+        }
+    };
+
+    // Cargar datos del dashboard
     const loadDashboardData = async () => {
         setLoading(true);
+        setError(null);
+
         try {
-            // En un entorno real, estas serían llamadas API reales a endpoints de estadísticas
-            // Por ahora, usaremos datos simulados para la demostración
+            const combinedFilters = {
+                ...filters,
+                date_from: dateRange.from,
+                date_to: dateRange.to
+            };
 
-            // Simular carga de datos
-            await new Promise(resolve => setTimeout(resolve, 800));
+            console.log("Cargando datos del dashboard con filtros:", combinedFilters);
 
-            // Datos simulados
-            const mockData = generateMockData(timeRange);
-            setDashboardData(mockData);
-            setError(null);
+            // Obtener datos de estadísticas
+            const response = await statisticsService.getDashboardStatistics(combinedFilters);
+            
+            console.log("Respuesta completa de estadísticas:", response);
+            
+            if (response && response.ok) {
+                // Transformar datos para el dashboard
+                const { data } = response;
+                console.log("Datos recibidos del servidor:", data);
+                
+                // Asegurarse de que todas las propiedades existan antes de usarlas
+                const counts = data.counts || {};
+                const financialSummary = data.financialSummary || {};
+                const topClients = data.top_clients || data.topClients || [];
+                const topDrivers = data.top_drivers || data.topDrivers || [];
+                
+                console.log("Contadores:", counts);
+                console.log("Resumen financiero:", financialSummary);
+                console.log("Top clientes:", topClients);
+                console.log("Top conductores:", topDrivers);
+                
+                const processedData = {
+                    shipments: {
+                        total: counts.total_shipments || 0,
+                        pending: counts.pending_shipments || 0,
+                        inTransit: counts.in_transit_shipments || 0,
+                        delivered: counts.delivered_shipments || 0,
+                        cancelled: counts.cancelled_shipments || 0
+                    },
+                    clients: {
+                        total: counts.active_clients || 0,
+                        active: counts.active_clients || 0
+                    },
+                    revenue: financialSummary?.total_shipping_revenue || 0,
+                    topClients: topClients.slice(0, 5).map(client => ({
+                        ...client,
+                        business_name: client.business_name || client.client_name || 'Cliente sin nombre',
+                        shipment_count: client.shipment_count || client.count || 0,
+                        total_revenue: client.total_revenue || 0
+                    })),
+                    topDrivers: topDrivers.slice(0, 5).map(driver => ({
+                        ...driver,
+                        driver_name: driver.driver_name || 'Conductor sin nombre',
+                        shipment_count: driver.shipment_count || driver.count || 0,
+                        total_revenue: driver.total_revenue || 0
+                    })),
+                    shipmentsByStatus: [
+                        { name: 'Pendientes', value: counts.pending_shipments || 0 },
+                        { name: 'En tránsito', value: counts.in_transit_shipments || 0 },
+                        { name: 'Entregados', value: counts.delivered_shipments || 0 },
+                        { name: 'Cancelados', value: counts.cancelled_shipments || 0 }
+                    ]
+                };
+                
+                console.log("Datos procesados para el dashboard:", processedData);
+                setDashboardData(processedData);
+            } else {
+                console.error("Error en la respuesta:", response);
+                setError('Error al cargar estadísticas: ' + (response?.msg || 'Respuesta inválida del servidor'));
+            }
         } catch (err) {
-            console.error('Error al cargar datos del dashboard:', err);
-            setError('Error al cargar las estadísticas. Por favor, intente nuevamente.');
+            console.error('Error al cargar datos:', err);
+            setError('Error al cargar las estadísticas: ' + (err.message || 'Error desconocido'));
         } finally {
             setLoading(false);
         }
     };
 
-    // Generar datos simulados basados en el rango de tiempo
-    const generateMockData = (range) => {
-        // Diferentes períodos para diferentes rangos de tiempo
-        let periods = [];
-        let shipmentCount = 0;
-        let completedCount = 0;
-        let cancelledCount = 0;
-        let transitCount = 0;
-        let pendingCount = 0;
-        let totalRevenue = 0;
+    // Manejar cambios en los filtros
+    const handleFilterChange = (e) => {
+        const { name, value } = e.target;
+        console.log(`Filtro cambiado: ${name} = ${value}`);
+        setFilters(prev => ({
+            ...prev,
+            [name]: value
+        }));
+    };
 
-        switch (range) {
-            case 'week':
-                periods = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-                shipmentCount = 28;
-                totalRevenue = 12500;
-                break;
-            case 'month':
-                periods = ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4'];
-                shipmentCount = 120;
-                totalRevenue = 52000;
-                break;
-            case 'quarter':
-                periods = ['Ene', 'Feb', 'Mar'];
-                shipmentCount = 350;
-                totalRevenue = 142000;
-                break;
-            case 'year':
-                periods = ['T1', 'T2', 'T3', 'T4'];
-                shipmentCount = 1200;
-                totalRevenue = 580000;
-                break;
-            default:
-                periods = ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4'];
+    // Aplicar filtros
+    const applyFilters = () => {
+        console.log("Aplicando filtros:", filters);
+        loadDashboardData();
+    };
+
+    // Resetear filtros
+    const resetFilters = () => {
+        console.log("Reseteando filtros");
+        setFilters({
+            client_id: '',
+            driver_id: '',
+            status: ''
+        });
+        setTimeout(() => {
+            loadDashboardData();
+        }, 100);
+    };
+
+    // Exportar estadísticas
+    const handleExportStatistics = async (type) => {
+        try {
+            console.log(`Exportando estadísticas de tipo: ${type}`);
+            await statisticsService.exportStatistics(type, {
+                date_from: dateRange.from,
+                date_to: dateRange.to,
+                ...filters
+            });
+        } catch (error) {
+            console.error('Error al exportar estadísticas:', error);
+            setError('Error al exportar las estadísticas: ' + (error.message || 'Error desconocido'));
         }
-
-        // Distribuir estados
-        completedCount = Math.round(shipmentCount * 0.65);
-        cancelledCount = Math.round(shipmentCount * 0.05);
-        transitCount = Math.round(shipmentCount * 0.20);
-        pendingCount = shipmentCount - completedCount - cancelledCount - transitCount;
-
-        // Datos de tendencias
-        const shipmentsByDate = periods.map((period, index) => {
-            const value = Math.floor(Math.random() * (shipmentCount / periods.length * 1.5) + shipmentCount / periods.length * 0.5);
-            return { name: period, value };
-        });
-
-        const revenueByDate = periods.map((period, index) => {
-            const value = Math.floor(Math.random() * (totalRevenue / periods.length * 1.5) + totalRevenue / periods.length * 0.7);
-            return { name: period, value };
-        });
-
-        const shipmentsByStatus = [
-            { name: 'Completados', value: completedCount },
-            { name: 'En tránsito', value: transitCount },
-            { name: 'Pendientes', value: pendingCount },
-            { name: 'Cancelados', value: cancelledCount }
-        ];
-
-        const driverNames = ['Carlos Rodríguez', 'Juan Pérez', 'Roberto Sánchez', 'Ana Martínez', 'Luis González'];
-
-        const shipmentsByDriver = driverNames.map(name => ({
-            name,
-            value: Math.floor(Math.random() * (shipmentCount / 5 * 1.3) + shipmentCount / 5 * 0.7)
-        })).sort((a, b) => b.value - a.value);
-
-        const destinations = ['Miami, FL', 'Orlando, FL', 'Tampa, FL', 'Fort Lauderdale, FL', 'Jacksonville, FL', 'Naples, FL'];
-
-        const topDestinations = destinations.map(name => ({
-            name,
-            value: Math.floor(Math.random() * (shipmentCount / 6 * 1.3) + shipmentCount / 6 * 0.7)
-        })).sort((a, b) => b.value - a.value);
-
-        const clients = ['Global Logistics Inc.', 'Cargas Express', 'TransMiami LLC', 'FastDeliver S.A.', 'Cargo Services'];
-
-        const topClients = clients.map(name => ({
-            name,
-            value: Math.floor(Math.random() * (shipmentCount / 5 * 1.3) + shipmentCount / 5 * 0.7)
-        })).sort((a, b) => b.value - a.value);
-
-        // Datos de rendimiento
-        const driverEfficiency = driverNames.map(name => ({
-            name,
-            onTime: Math.floor(Math.random() * 30) + 70, // Porcentaje a tiempo (70-100%)
-            shipments: Math.floor(Math.random() * (shipmentCount / 5 * 1.3) + shipmentCount / 5 * 0.7)
-        })).sort((a, b) => b.onTime - a.onTime);
-
-        return {
-            totals: {
-                shipments: shipmentCount,
-                clients: clients.length,
-                drivers: driverNames.length,
-                revenue: totalRevenue,
-                pendingShipments: pendingCount,
-                completedShipments: completedCount,
-                cancelledShipments: cancelledCount,
-                transitShipments: transitCount
-            },
-            trends: {
-                shipmentsByDate,
-                revenueByDate,
-                shipmentsByStatus,
-                shipmentsByDriver,
-                topDestinations,
-                topClients
-            },
-            performance: {
-                avgDeliveryTime: Math.floor(Math.random() * 24) + 48, // Horas promedio (48-72)
-                onTimeDelivery: Math.floor(Math.random() * 15) + 80, // Porcentaje (80-95%)
-                lateDeliveries: Math.floor(Math.random() * 20), // Porcentaje (0-20%)
-                driverEfficiency
-            }
-        };
     };
 
-    // Colores para gráficos
-    const colors = {
-        primary: '#3b82f6',
-        secondary: '#10b981',
-        tertiary: '#f59e0b',
-        quaternary: '#ef4444',
-        gray: '#6b7280',
-        completed: '#10b981',
-        transit: '#3b82f6',
-        pending: '#f59e0b',
-        cancelled: '#ef4444',
-        chartColors: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
-    };
-
-    // Formateo de números
+    // Formatear moneda
     const formatCurrency = (value) => {
         return new Intl.NumberFormat('es-AR', {
             style: 'currency',
@@ -228,28 +269,43 @@ const StatisticsDashboard = () => {
         }).format(value);
     };
 
-    // Renderizar estado de carga
-    if (loading && !dashboardData.totals.shipments) {
+    // Colores para gráficos
+    const colors = {
+        pending: '#f59e0b',     // Amber
+        inTransit: '#3b82f6',   // Blue
+        delivered: '#10b981',   // Green
+        cancelled: '#ef4444',   // Red
+        chartColors: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
+    };
+
+    // Mostrar spinner mientras se cargan los datos iniciales
+    if (loading && !dashboardData.shipments.total) {
         return (
             <div className="flex justify-center items-center min-h-screen">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                <p className="ml-3 text-gray-600">Cargando estadísticas...</p>
             </div>
         );
     }
 
     return (
         <div className="container mx-auto py-6 px-4">
-            <div className="flex justify-between items-center mb-6">
+            {/* Cabecera y controles */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                 <h1 className="text-2xl font-bold text-gray-800 flex items-center">
                     <BarChart2 className="w-6 h-6 text-blue-600 mr-2" />
                     Dashboard de Estadísticas
                 </h1>
 
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     <div className="relative">
                         <select
                             value={timeRange}
-                            onChange={(e) => setTimeRange(e.target.value)}
+                            onChange={(e) => {
+                                console.log("Cambiando rango de tiempo a:", e.target.value);
+                                setTimeRange(e.target.value);
+                                setTimeout(calculateDateRange, 10);
+                            }}
                             className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm appearance-none bg-white"
                         >
                             <option value="week">Última semana</option>
@@ -261,22 +317,120 @@ const StatisticsDashboard = () => {
                     </div>
 
                     <button
-                        onClick={loadDashboardData}
+                        onClick={() => setShowFilters(!showFilters)}
+                        className="flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                        <Filter className="w-4 h-4 mr-2" />
+                        Filtros
+                        {showFilters ? <ChevronUp className="w-4 h-4 ml-1" /> : <ChevronDown className="w-4 h-4 ml-1" />}
+                    </button>
+
+                    <button
+                        onClick={() => {
+                            console.log("Actualizando datos del dashboard");
+                            loadDashboardData();
+                        }}
                         className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                     >
                         <RefreshCw className="w-4 h-4 mr-2" />
                         Actualizar
                     </button>
+
+                    <button
+                        onClick={() => handleExportStatistics('general')}
+                        className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    >
+                        <Download className="w-4 h-4 mr-2" />
+                        Exportar
+                    </button>
                 </div>
             </div>
 
+            {/* Filtros */}
+            {showFilters && (
+                <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                    <h3 className="text-lg font-medium text-gray-800 mb-3">Filtros</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label htmlFor="client_id" className="block text-sm font-medium text-gray-700 mb-1">
+                                Cliente
+                            </label>
+                            <select
+                                id="client_id"
+                                name="client_id"
+                                value={filters.client_id}
+                                onChange={handleFilterChange}
+                                className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                            >
+                                <option value="">Todos los clientes</option>
+                                {availableClients.map(client => (
+                                    <option key={client.id} value={client.id}>
+                                        {client.business_name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="driver_id" className="block text-sm font-medium text-gray-700 mb-1">
+                                Transportista
+                            </label>
+                            <select
+                                id="driver_id"
+                                name="driver_id"
+                                value={filters.driver_id}
+                                onChange={handleFilterChange}
+                                className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                            >
+                                <option value="">Todos los transportistas</option>
+                                {availableDrivers.map(driver => (
+                                    <option key={driver.id} value={driver.id}>
+                                        {driver.firstname} {driver.lastname}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+                                Estado de envíos
+                            </label>
+                            <select
+                                id="status"
+                                name="status"
+                                value={filters.status}
+                                onChange={handleFilterChange}
+                                className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                            >
+                                <option value="">Todos los estados</option>
+                                <option value="pendiente">Pendientes</option>
+                                <option value="en_transito">En tránsito</option>
+                                <option value="entregado">Entregados</option>
+                                <option value="cancelado">Cancelados</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div className="flex justify-end mt-4 gap-2">
+                        <button
+                            onClick={resetFilters}
+                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                            Resetear
+                        </button>
+                        <button
+                            onClick={applyFilters}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                            Aplicar Filtros
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Mensajes de error */}
             {error && (
                 <div className="mb-6 bg-red-50 border-l-4 border-red-400 p-4 rounded-r-lg">
                     <div className="flex">
                         <div className="flex-shrink-0">
-                            <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                            </svg>
+                            <AlertTriangle className="h-5 w-5 text-red-400" />
                         </div>
                         <div className="ml-3">
                             <p className="text-sm text-red-700">{error}</p>
@@ -285,39 +439,59 @@ const StatisticsDashboard = () => {
                 </div>
             )}
 
-            {/* Tarjetas resumen */}
+            {/* Indicadores clave */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <SummaryCard
-                    title="Total de Envíos"
-                    value={dashboardData.totals.shipments}
-                    icon={<Package className="w-6 h-6 text-blue-600" />}
-                    color="bg-blue-50 border-blue-200"
-                    change={4.5}
-                />
+                <div className="p-6 rounded-xl shadow-sm bg-blue-50 border border-blue-200">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-sm font-medium text-gray-600 mb-1">Total de Envíos</p>
+                            <h3 className="text-2xl font-bold text-gray-800">{dashboardData.shipments.total}</h3>
+                        </div>
+                        <div className="p-2 rounded-full bg-white/80 shadow-sm">
+                            <Package className="w-6 h-6 text-blue-600" />
+                        </div>
+                    </div>
+                </div>
 
-                <SummaryCard
-                    title="Ingresos Totales"
-                    value={formatCurrency(dashboardData.totals.revenue)}
-                    icon={<DollarSign className="w-6 h-6 text-green-600" />}
-                    color="bg-green-50 border-green-200"
-                    change={2.7}
-                />
+                <div className="p-6 rounded-xl shadow-sm bg-green-50 border border-green-200">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-sm font-medium text-gray-600 mb-1">Ingresos Totales</p>
+                            <h3 className="text-2xl font-bold text-gray-800">{formatCurrency(dashboardData.revenue)}</h3>
+                        </div>
+                        <div className="p-2 rounded-full bg-white/80 shadow-sm">
+                            <DollarSign className="w-6 h-6 text-green-600" />
+                        </div>
+                    </div>
+                </div>
 
-                <SummaryCard
-                    title="Clientes Activos"
-                    value={dashboardData.totals.clients}
-                    icon={<Users className="w-6 h-6 text-purple-600" />}
-                    color="bg-purple-50 border-purple-200"
-                    change={1.2}
-                />
+                <div className="p-6 rounded-xl shadow-sm bg-purple-50 border border-purple-200">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-sm font-medium text-gray-600 mb-1">Clientes Activos</p>
+                            <h3 className="text-2xl font-bold text-gray-800">{dashboardData.clients.active}</h3>
+                        </div>
+                        <div className="p-2 rounded-full bg-white/80 shadow-sm">
+                            <Users className="w-6 h-6 text-purple-600" />
+                        </div>
+                    </div>
+                </div>
 
-                <SummaryCard
-                    title="Transportistas"
-                    value={dashboardData.totals.drivers}
-                    icon={<Truck className="w-6 h-6 text-amber-600" />}
-                    color="bg-amber-50 border-amber-200"
-                    change={0}
-                />
+                <div className="p-6 rounded-xl shadow-sm bg-amber-50 border border-amber-200">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-sm font-medium text-gray-600 mb-1">Tasa de Entrega Exitosa</p>
+                            <h3 className="text-2xl font-bold text-gray-800">
+                                {dashboardData.shipments.total > 0 
+                                    ? `${((dashboardData.shipments.delivered / dashboardData.shipments.total) * 100).toFixed(1)}%` 
+                                    : '0%'}
+                            </h3>
+                        </div>
+                        <div className="p-2 rounded-full bg-white/80 shadow-sm">
+                            <Truck className="w-6 h-6 text-amber-600" />
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {/* Estado de envíos */}
@@ -325,81 +499,73 @@ const StatisticsDashboard = () => {
                 <h2 className="text-lg font-medium text-gray-800 mb-4">Estado de Envíos</h2>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <StatusCard
-                        title="Pendientes"
-                        value={dashboardData.totals.pendingShipments}
-                        icon={<Clock className="w-5 h-5 text-amber-600" />}
-                        color="bg-amber-50 border-amber-200 text-amber-800"
-                        percentage={Math.round((dashboardData.totals.pendingShipments / dashboardData.totals.shipments) * 100)}
-                    />
+                    <div className="p-4 rounded-lg bg-amber-50 border-amber-200 text-amber-800">
+                        <div className="flex justify-between items-start mb-2">
+                            <p className="text-sm font-medium">Pendientes</p>
+                        </div>
+                        <h3 className="text-xl font-bold mb-1">{dashboardData.shipments.pending}</h3>
+                        <div className="flex justify-between items-center text-xs">
+                            <span>
+                                {dashboardData.shipments.total > 0 
+                                    ? `${((dashboardData.shipments.pending / dashboardData.shipments.total) * 100).toFixed(0)}%` 
+                                    : '0%'} del total
+                            </span>
+                        </div>
+                    </div>
 
-                    <StatusCard
-                        title="En tránsito"
-                        value={dashboardData.totals.transitShipments}
-                        icon={<Truck className="w-5 h-5 text-blue-600" />}
-                        color="bg-blue-50 border-blue-200 text-blue-800"
-                        percentage={Math.round((dashboardData.totals.transitShipments / dashboardData.totals.shipments) * 100)}
-                    />
+                    <div className="p-4 rounded-lg bg-blue-50 border-blue-200 text-blue-800">
+                        <div className="flex justify-between items-start mb-2">
+                            <p className="text-sm font-medium">En tránsito</p>
+                        </div>
+                        <h3 className="text-xl font-bold mb-1">{dashboardData.shipments.inTransit}</h3>
+                        <div className="flex justify-between items-center text-xs">
+                            <span>
+                                {dashboardData.shipments.total > 0 
+                                    ? `${((dashboardData.shipments.inTransit / dashboardData.shipments.total) * 100).toFixed(0)}%` 
+                                    : '0%'} del total
+                            </span>
+                        </div>
+                    </div>
 
-                    <StatusCard
-                        title="Completados"
-                        value={dashboardData.totals.completedShipments}
-                        icon={<Package className="w-5 h-5 text-green-600" />}
-                        color="bg-green-50 border-green-200 text-green-800"
-                        percentage={Math.round((dashboardData.totals.completedShipments / dashboardData.totals.shipments) * 100)}
-                    />
+                    <div className="p-4 rounded-lg bg-green-50 border-green-200 text-green-800">
+                        <div className="flex justify-between items-start mb-2">
+                            <p className="text-sm font-medium">Completados</p>
+                        </div>
+                        <h3 className="text-xl font-bold mb-1">{dashboardData.shipments.delivered}</h3>
+                        <div className="flex justify-between items-center text-xs">
+                            <span>
+                                {dashboardData.shipments.total > 0 
+                                    ? `${((dashboardData.shipments.delivered / dashboardData.shipments.total) * 100).toFixed(0)}%` 
+                                    : '0%'} del total
+                            </span>
+                        </div>
+                    </div>
 
-                    <StatusCard
-                        title="Cancelados"
-                        value={dashboardData.totals.cancelledShipments}
-                        icon={<FileText className="w-5 h-5 text-red-600" />}
-                        color="bg-red-50 border-red-200 text-red-800"
-                        percentage={Math.round((dashboardData.totals.cancelledShipments / dashboardData.totals.shipments) * 100)}
-                    />
+                    <div className="p-4 rounded-lg bg-red-50 border-red-200 text-red-800">
+                        <div className="flex justify-between items-start mb-2">
+                            <p className="text-sm font-medium">Cancelados</p>
+                        </div>
+                        <h3 className="text-xl font-bold mb-1">{dashboardData.shipments.cancelled}</h3>
+                        <div className="flex justify-between items-center text-xs">
+                            <span>
+                                {dashboardData.shipments.total > 0 
+                                    ? `${((dashboardData.shipments.cancelled / dashboardData.shipments.total) * 100).toFixed(0)}%` 
+                                    : '0%'} del total
+                            </span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            {/* Gráficos de tendencias */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                {/* Gráfico de envíos por tiempo */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                    <h2 className="text-lg font-medium text-gray-800 mb-4">Tendencia de Envíos</h2>
-                    <ResponsiveContainer width="100%" height={300}>
-                        <LineChart data={dashboardData.trends.shipmentsByDate} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="name" />
-                            <YAxis />
-                            <Tooltip formatter={(value) => [value, 'Envíos']} />
-                            <Legend />
-                            <Line type="monotone" dataKey="value" name="Envíos" stroke={colors.primary} strokeWidth={2} dot={{ r: 4 }} />
-                        </LineChart>
-                    </ResponsiveContainer>
-                </div>
-
-                {/* Gráfico de ingresos por tiempo */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                    <h2 className="text-lg font-medium text-gray-800 mb-4">Tendencia de Ingresos</h2>
-                    <ResponsiveContainer width="100%" height={300}>
-                        <LineChart data={dashboardData.trends.revenueByDate} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="name" />
-                            <YAxis />
-                            <Tooltip formatter={(value) => [formatCurrency(value), 'Ingresos']} />
-                            <Legend />
-                            <Line type="monotone" dataKey="value" name="Ingresos" stroke={colors.secondary} strokeWidth={2} dot={{ r: 4 }} />
-                        </LineChart>
-                    </ResponsiveContainer>
-                </div>
-            </div>
-
+            {/* Gráficos */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                 {/* Gráfico circular de estados */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                     <h2 className="text-lg font-medium text-gray-800 mb-4">Distribución por Estado</h2>
                     <ResponsiveContainer width="100%" height={300}>
-                        <RechartPieChart>
+                        <PieChart>
                             <Pie
-                                data={dashboardData.trends.shipmentsByStatus}
+                                data={dashboardData.shipmentsByStatus.filter(item => item.value > 0)}
                                 cx="50%"
                                 cy="50%"
                                 outerRadius={100}
@@ -407,13 +573,13 @@ const StatisticsDashboard = () => {
                                 dataKey="value"
                                 nameKey="name"
                                 labelLine={false}
-                                label={({ name, value, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                             >
-                                {dashboardData.trends.shipmentsByStatus.map((entry, index) => {
+                                {dashboardData.shipmentsByStatus.map((entry, index) => {
                                     let color;
                                     switch (entry.name) {
-                                        case 'Completados': color = colors.completed; break;
-                                        case 'En tránsito': color = colors.transit; break;
+                                        case 'Entregados': color = colors.delivered; break;
+                                        case 'En tránsito': color = colors.inTransit; break;
                                         case 'Pendientes': color = colors.pending; break;
                                         case 'Cancelados': color = colors.cancelled; break;
                                         default: color = colors.chartColors[index % colors.chartColors.length];
@@ -423,222 +589,119 @@ const StatisticsDashboard = () => {
                             </Pie>
                             <Tooltip formatter={(value, name) => [value, name]} />
                             <Legend />
-                        </RechartPieChart>
+                        </PieChart>
                     </ResponsiveContainer>
                 </div>
 
                 {/* Gráfico de barras de transportistas */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                     <h2 className="text-lg font-medium text-gray-800 mb-4">Envíos por Transportista</h2>
-                    <ResponsiveContainer width="100%" height={300}>
-                        <BarChart
-                            data={dashboardData.trends.shipmentsByDriver}
-                            margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                            layout="vertical"
-                        >
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis type="number" />
-                            <YAxis dataKey="name" type="category" width={150} />
-                            <Tooltip />
-                            <Bar dataKey="value" name="Envíos" fill={colors.tertiary} />
-                        </BarChart>
-                    </ResponsiveContainer>
+                    {dashboardData.topDrivers && dashboardData.topDrivers.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={300}>
+                            <BarChart
+                                data={dashboardData.topDrivers.map(driver => ({
+                                    name: driver.driver_name,
+                                    shipments: driver.shipment_count || 0
+                                }))}
+                                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                                layout="vertical"
+                            >
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis type="number" />
+                                <YAxis dataKey="name" type="category" width={150} />
+                                <Tooltip formatter={(value) => [value, 'Envíos']} />
+                                <Legend />
+                                <Bar dataKey="shipments" name="Envíos" fill="#f59e0b" />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="text-center py-10 text-gray-500">
+                            No hay datos disponibles sobre transportistas
+                        </div>
+                    )}
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                {/* Top destinos */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                    <h2 className="text-lg font-medium text-gray-800 mb-4">Destinos Principales</h2>
+            {/* Top clientes */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+                <h2 className="text-lg font-medium text-gray-800 mb-4">Clientes Principales</h2>
+                {dashboardData.topClients && dashboardData.topClients.length > 0 ? (
                     <div className="space-y-4">
-                        {dashboardData.trends.topDestinations.slice(0, 5).map((destination, index) => (
-                            <div key={index} className="flex items-center">
-                                <div className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-100 text-blue-800 mr-3 font-medium">
-                                    {index + 1}
-                                </div>
-                                <div className="flex-1">
-                                    <div className="flex justify-between mb-1">
-                                        <span className="text-sm font-medium text-gray-700">{destination.name}</span>
-                                        <span className="text-sm text-gray-500">{destination.value} envíos</span>
-                                    </div>
-                                    <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                        <div
-                                            className="bg-blue-600 h-2.5 rounded-full"
-                                            style={{ width: `${Math.min(100, (destination.value / dashboardData.trends.topDestinations[0].value) * 100)}%` }}
-                                        ></div>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Top clientes */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                    <h2 className="text-lg font-medium text-gray-800 mb-4">Clientes Principales</h2>
-                    <div className="space-y-4">
-                        {dashboardData.trends.topClients.slice(0, 5).map((client, index) => (
+                        {dashboardData.topClients.map((client, index) => (
                             <div key={index} className="flex items-center">
                                 <div className="w-8 h-8 flex items-center justify-center rounded-full bg-green-100 text-green-800 mr-3 font-medium">
                                     {index + 1}
                                 </div>
                                 <div className="flex-1">
                                     <div className="flex justify-between mb-1">
-                                        <span className="text-sm font-medium text-gray-700">{client.name}</span>
-                                        <span className="text-sm text-gray-500">{client.value} envíos</span>
+                                        <span className="text-sm font-medium text-gray-700">{client.business_name || 'Cliente sin nombre'}</span>
+                                        <span className="text-sm text-gray-500">
+                                            {client.shipment_count || 0} envíos
+                                            {client.total_revenue ? ` • ${formatCurrency(client.total_revenue)}` : ''}
+                                        </span>
                                     </div>
                                     <div className="w-full bg-gray-200 rounded-full h-2.5">
                                         <div
                                             className="bg-green-600 h-2.5 rounded-full"
-                                            style={{ width: `${Math.min(100, (client.value / dashboardData.trends.topClients[0].value) * 100)}%` }}
+                                            style={{ width: `${Math.min(100, (client.shipment_count / (dashboardData.topClients[0]?.shipment_count || 1)) * 100)}%` }}
                                         ></div>
                                     </div>
                                 </div>
                             </div>
                         ))}
                     </div>
-                </div>
+                ) : (
+                    <div className="text-center py-10 text-gray-500">
+                        No hay datos disponibles sobre clientes
+                    </div>
+                )}
             </div>
 
-            {/* Métricas de rendimiento */}
+            {/* Opciones de exportación */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-                <h2 className="text-lg font-medium text-gray-800 mb-4">Métricas de Rendimiento</h2>
+                <h2 className="text-lg font-medium text-gray-800 mb-4">Exportar Estadísticas</h2>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                    <div className="flex flex-col items-center justify-center p-6 bg-gray-50 rounded-xl">
-                        <div className="text-3xl font-bold text-gray-800 mb-2">
-                            {dashboardData.performance.avgDeliveryTime}h
-                        </div>
-                        <div className="text-sm text-gray-600 text-center">
-                            Tiempo Promedio de Entrega
-                        </div>
-                    </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <button
+                        onClick={() => handleExportStatistics('shipments')}
+                        className="flex flex-col items-center justify-center p-4 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors"
+                    >
+                        <Package className="w-8 h-8 mb-2" />
+                        <span className="text-sm font-medium">Envíos</span>
+                    </button>
 
-                    <div className="flex flex-col items-center justify-center p-6 bg-green-50 rounded-xl">
-                        <div className="text-3xl font-bold text-green-800 mb-2">
-                            {dashboardData.performance.onTimeDelivery}%
-                        </div>
-                        <div className="text-sm text-green-600 text-center">
-                            Entregas a Tiempo
-                        </div>
-                    </div>
+                    <button
+                        onClick={() => handleExportStatistics('clients')}
+                        className="flex flex-col items-center justify-center p-4 bg-green-50 hover:bg-green-100 text-green-600 rounded-lg transition-colors"
+                    >
+                        <Users className="w-8 h-8 mb-2" />
+                        <span className="text-sm font-medium">Clientes</span>
+                    </button>
 
-                    <div className="flex flex-col items-center justify-center p-6 bg-red-50 rounded-xl">
-                        <div className="text-3xl font-bold text-red-800 mb-2">
-                            {dashboardData.performance.lateDeliveries}%
-                        </div>
-                        <div className="text-sm text-red-600 text-center">
-                            Entregas con Retraso
-                        </div>
-                    </div>
-                </div>
+                    <button
+                        onClick={() => handleExportStatistics('drivers')}
+                        className="flex flex-col items-center justify-center p-4 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-lg transition-colors"
+                    >
+                        <Truck className="w-8 h-8 mb-2" />
+                        <span className="text-sm font-medium">Transportistas</span>
+                    </button>
 
-                <h3 className="text-md font-medium text-gray-700 mb-3">Eficiencia de Transportistas</h3>
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Transportista
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Envíos
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Entregas a Tiempo
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Eficiencia
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {dashboardData.performance.driverEfficiency.map((driver, index) => (
-                                <tr key={index}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                        {driver.name}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {driver.shipments}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {driver.onTime}%
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                            <div
-                                                className={`h-2.5 rounded-full ${driver.onTime >= 90 ? 'bg-green-600' : driver.onTime >= 80 ? 'bg-yellow-400' : 'bg-red-500'}`}
-                                                style={{ width: `${driver.onTime}%` }}
-                                            ></div>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                    <button
+                        onClick={() => handleExportStatistics('general')}
+                        className="flex flex-col items-center justify-center p-4 bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-lg transition-colors"
+                    >
+                        <BarChart2 className="w-8 h-8 mb-2" />
+                        <span className="text-sm font-medium">Reporte General</span>
+                    </button>
                 </div>
             </div>
 
             {/* Nota informativa */}
             <div className="p-4 bg-blue-50 rounded-xl border border-blue-100 text-blue-700 text-sm">
                 <p>
-                    <strong>Nota:</strong> Este dashboard muestra datos estadísticos acumulados. Los datos mostrados son simulados con fines demostrativos.
-                    En una implementación real, estos datos provendrían de la API del sistema.
+                    <strong>Nota:</strong> Este dashboard muestra estadísticas del período seleccionado. Para datos más detallados,
+                    utilice las opciones de exportación.
                 </p>
-            </div>
-        </div>
-    );
-};
-
-// Componente de tarjeta resumen
-const SummaryCard = ({ title, value, icon, color, change }) => {
-    return (
-        <div className={`p-6 rounded-xl shadow-sm ${color} border`}>
-            <div className="flex justify-between items-start">
-                <div>
-                    <p className="text-sm font-medium text-gray-600 mb-1">{title}</p>
-                    <h3 className="text-2xl font-bold text-gray-800">{value}</h3>
-                </div>
-                <div className="p-2 rounded-full bg-white/80 shadow-sm">
-                    {icon}
-                </div>
-            </div>
-
-            {change !== undefined && (
-                <div className="mt-4 flex items-center">
-                    {change > 0 ? (
-                        <span className="text-green-600 text-xs font-medium flex items-center">
-                            <ArrowUp className="w-3 h-3 mr-1" />
-                            {change}% vs. periodo anterior
-                        </span>
-                    ) : change < 0 ? (
-                        <span className="text-red-600 text-xs font-medium flex items-center">
-                            <ArrowDown className="w-3 h-3 mr-1" />
-                            {Math.abs(change)}% vs. periodo anterior
-                        </span>
-                    ) : (
-                        <span className="text-gray-600 text-xs font-medium flex items-center">
-                            Sin cambios vs. periodo anterior
-                        </span>
-                    )}
-                </div>
-            )}
-        </div>
-    );
-};
-
-// Componente de tarjeta de estado
-const StatusCard = ({ title, value, icon, color, percentage }) => {
-    return (
-        <div className={`p-4 rounded-lg ${color}`}>
-            <div className="flex justify-between items-start mb-2">
-                <p className="text-sm font-medium">{title}</p>
-                {icon}
-            </div>
-            <h3 className="text-xl font-bold mb-1">{value}</h3>
-            <div className="flex justify-between items-center text-xs">
-                <span>{percentage}% del total</span>
-                <span>{value} envíos</span>
             </div>
         </div>
     );
