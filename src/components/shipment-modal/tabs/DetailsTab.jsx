@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPin, DollarSign, MapIcon, AlertCircle } from 'lucide-react';
+import { MapPin, DollarSign, MapIcon, AlertCircle, Users } from 'lucide-react';
 import { statusMap, statusColors } from '../../../utils/shipmentUtils';
 import { formatShippingCost, getCurrentTotal } from '../utils';
 
@@ -49,6 +49,31 @@ const DetailsTab = ({
                                 />
                             ) : (
                                 <p className="text-gray-800 font-medium">{shipment.customer}</p>
+                            )}
+                        </div>
+
+                        {/* Subcliente - Nuevo campo añadido */}
+                        <div>
+                            <h3 className="text-sm font-medium text-gray-500 flex items-center">
+                                <Users className="w-4 h-4 mr-1 text-blue-500" />
+                                Sub Cliente
+                            </h3>
+                            {isEditing ? (
+                                <input
+                                    type="text"
+                                    value={editData.subclient || ''}
+                                    onChange={(e) => handleEditChange('subclient', e.target.value)}
+                                    className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Opcional"
+                                />
+                            ) : (
+                                <p className="text-gray-800">
+                                    {shipment.subclient ? (
+                                        shipment.subclient
+                                    ) : (
+                                        <span className="text-gray-400 italic text-sm">No especificado</span>
+                                    )}
+                                </p>
                             )}
                         </div>
 

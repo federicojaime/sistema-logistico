@@ -254,59 +254,69 @@ const ShipmentModal = ({
     };
 
     const handleSaveChanges = async () => {
-        try {
-            setIsLoading(true);
+    try {
+        setIsLoading(true);
 
-            if (!editData.origin_address || !editData.destination_address) {
-                setSuccessMessage('Las direcciones de origen y destino son obligatorias');
-                setIsLoading(false);
-                return;
-            }
-
-            // Calcular total de los items
-            const totalItemsValue = (editData.items || []).reduce((total, item) => {
-                return total + (Number(item.value) || 0) * (Number(item.quantity) || 1);
-            }, 0);
-
-            // Filtrar items vacíos
-            const filteredItems = (editData.items || []).filter(item =>
-                item.description?.trim() !== '' ||
-                Number(item.quantity) > 0 ||
-                Number(item.weight) > 0 ||
-                Number(item.value) > 0
-            );
-
-            const dataToSend = {
-                ...editData,
-                items: filteredItems,
-                shipping_cost: totalItemsValue,
-                origin_lat: String(editData.origin_lat || 0),
-                origin_lng: String(editData.origin_lng || 0),
-                destination_lat: String(editData.destination_lat || 0),
-                destination_lng: String(editData.destination_lng || 0),
-                admin_override: userRole === 'admin' ? true : undefined
-            };
-
-            setSuccessMessage('Guardando cambios...');
-
-            const response = await api.put(`/shipment/${editData.id}`, dataToSend);
-
-            if (response) {
-                setSuccessMessage('Envío actualizado correctamente');
-                await refreshShipments();
-                await reloadShipmentData(shipment.id);
-                setIsEditing(false);
-            } else {
-                throw new Error('Error al actualizar envío');
-            }
-        } catch (error) {
-            console.error('Error al actualizar envío:', error);
-            setSuccessMessage('Error al actualizar envío: ' + (error.message || 'Error desconocido'));
-        } finally {
+        if (!editData.origin_address || !editData.destination_address) {
+            setSuccessMessage('Las direcciones de origen y destino son obligatorias');
             setIsLoading(false);
+            return;
         }
-    };
 
+        // Calcular total de los items
+        const totalItemsValue = (editData.items || []).reduce((total, item) => {
+            return total + (Number(item.value) || 0) * (Number(item.quantity) || 1);
+        }, 0);
+
+        // Filtrar items vacíos
+        const filteredItems = (editData.items || []).filter(item =>
+            item.description?.trim() !== '' ||
+            Number(item.quantity) > 0 ||
+            Number(item.weight) > 0 ||
+            Number(item.value) > 0
+        );
+
+        const dataToSend = {
+            ...editData,
+            items: filteredItems,
+            shipping_cost: totalItemsValue,
+            origin_lat: String(editData.origin_lat || 0),
+            origin_lng: String(editData.origin_lng || 0),
+            destination_lat: String(editData.destination_lat || 0),
+            destination_lng: String(editData.destination_lng || 0),
+            admin_override: userRole === 'admin' ? true : undefined
+        };
+
+        setSuccessMessage('Guardando cambios...');
+
+        const response = await api.put(`/shipment/${editData.id}`, dataToSend);
+
+        if (response) {
+            setSuccessMessage('Envío actualizado correctamente');
+            
+            // Actualizar la lista general de envíos
+            await refreshShipments();
+            
+            // Volver a cargar los datos del envío actual 
+            const updatedShipment = await reloadShipmentData(shipment.id);
+            
+            // IMPORTANTE: Actualizar la referencia al shipment principal
+            if (updatedShipment) {
+                // Esta es la línea clave: actualizar la referencia del shipment
+                Object.assign(shipment, updatedShipment);
+            }
+            
+            setIsEditing(false);
+        } else {
+            throw new Error('Error al actualizar envío');
+        }
+    } catch (error) {
+        console.error('Error al actualizar envío:', error);
+        setSuccessMessage('Error al actualizar envío: ' + (error.message || 'Error desconocido'));
+    } finally {
+        setIsLoading(false);
+    }
+};
     // Función para formatear URL del documento
     const formatDocumentUrl = (documentPath) => {
         if (!documentPath) return '#';

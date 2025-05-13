@@ -1,6 +1,6 @@
 // src/components/shipment-creation/components/ItemsStep.jsx
 import React, { useState } from 'react';
-import { Plus, Trash2, Package } from 'lucide-react';
+import { Plus, Trash2, Package, Check, X } from 'lucide-react';
 import DescriptionAutocomplete from '../../DescriptionAutocomplete';
 
 const INITIAL_ITEM = {
@@ -13,6 +13,88 @@ const INITIAL_ITEM = {
 const ItemsStep = ({ shipment, setShipment, errors, setErrors }) => {
     const [newItem, setNewItem] = useState(INITIAL_ITEM);
     const [itemError, setItemError] = useState('');
+
+    // Función para manejar cambios en los servicios directamente desde esta pantalla
+    const handleServiceChange = (service, value) => {
+        setShipment(prev => ({
+            ...prev,
+            [service]: value
+        }));
+        
+        // Limpiar el error de items si existía y ahora hay servicios seleccionados
+        if (errors.items) {
+            const hasServiceItems = 
+                (service === 'liftGate' && value === 'YES') || 
+                (service !== 'liftGate' && shipment.liftGate === 'YES') ||
+                (service === 'appointment' && value === 'YES') || 
+                (service !== 'appointment' && shipment.appointment === 'YES') ||
+                (service === 'palletJack' && value === 'YES') || 
+                (service !== 'palletJack' && shipment.palletJack === 'YES');
+                
+            if (hasServiceItems) {
+                setErrors(prev => ({ ...prev, items: undefined }));
+            }
+        }
+    };
+
+    // Función para manejar cambios en los precios de los servicios
+    const handleServicePriceChange = (service, price) => {
+        setShipment(prev => ({
+            ...prev,
+            servicePrices: {
+                ...prev.servicePrices,
+                [service]: parseFloat(price) || 0
+            }
+        }));
+    };
+
+    // Crear array de ítems de servicios basados en los servicios seleccionados
+    const getServiceItems = () => {
+        const serviceItems = [];
+        
+        // Agregar Lift Gate si está activo
+        if (shipment.liftGate === 'YES') {
+            serviceItems.push({
+                id: 'service-liftGate',
+                descripcion: 'Servicio: Lift Gate',
+                cantidad: 1,
+                pesoTotal: 0,
+                valorTotal: parseFloat(shipment.servicePrices.liftGate) || 0,
+                isService: true,
+                serviceType: 'liftGate'
+            });
+        }
+        
+        // Agregar Appointment si está activo
+        if (shipment.appointment === 'YES') {
+            serviceItems.push({
+                id: 'service-appointment',
+                descripcion: 'Servicio: Appointment',
+                cantidad: 1,
+                pesoTotal: 0,
+                valorTotal: parseFloat(shipment.servicePrices.appointment) || 0,
+                isService: true,
+                serviceType: 'appointment'
+            });
+        }
+        
+        // Agregar Pallet Jack si está activo
+        if (shipment.palletJack === 'YES') {
+            serviceItems.push({
+                id: 'service-palletJack',
+                descripcion: 'Servicio: Pallet Jack',
+                cantidad: 1,
+                pesoTotal: 0,
+                valorTotal: parseFloat(shipment.servicePrices.palletJack) || 0,
+                isService: true,
+                serviceType: 'palletJack'
+            });
+        }
+        
+        return serviceItems;
+    };
+    
+    const serviceItems = getServiceItems();
 
     const handleItemChange = (field, value) => {
         setNewItem(prev => ({
@@ -36,7 +118,7 @@ const ItemsStep = ({ shipment, setShipment, errors, setErrors }) => {
             return;
         }
 
-        const itemToAdd = { ...newItem, id: Date.now() };
+        const itemToAdd = { ...newItem, id: `item-${Date.now()}` };
 
         setShipment(prev => ({
             ...prev,
@@ -61,14 +143,26 @@ const ItemsStep = ({ shipment, setShipment, errors, setErrors }) => {
 
     // Calcular totales
     const calculateTotals = () => {
-        return shipment.items.reduce((acc, item) => ({
-            cantidad: acc.cantidad + item.cantidad,
-            peso: acc.peso + (parseFloat(item.pesoTotal) * parseFloat(item.cantidad)),
-            valor: acc.valor + (parseFloat(item.valorTotal) * parseFloat(item.cantidad)),
-        }), { cantidad: 0, peso: 0, valor: 0 });
-    };
+        // Combinar ítems regulares y de servicios
+        const allItems = [...shipment.items, ...serviceItems];
 
+        return allItems.reduce(
+            (acc, item) => ({
+                cantidad: acc.cantidad + parseInt(item.cantidad || 1),
+                peso: acc.peso + (parseFloat(item.pesoTotal || 0) * parseInt(item.cantidad || 1)),
+                valor: acc.valor + (parseFloat(item.valorTotal || 0) * parseInt(item.cantidad || 1)),
+            }),
+            { cantidad: 0, peso: 0, valor: 0 }
+        );
+    };
+    
     const totals = calculateTotals();
+
+    // Todos los items combinados (regulares + servicios)
+    const allItems = [...shipment.items, ...serviceItems];
+    
+    // Verificar si hay ítems válidos (regulares o servicios)
+    const hasValidItems = shipment.items.length > 0 || serviceItems.length > 0;
 
     return (
         <div className="space-y-6">
@@ -151,6 +245,175 @@ const ItemsStep = ({ shipment, setShipment, errors, setErrors }) => {
                         </div>
                     </div>
                 </div>
+                
+                {/* Servicios adicionales */}
+                <div className="mb-6 border-t pt-6">
+                    <h3 className="font-medium text-gray-800 mb-4">Servicios Adicionales</h3>
+                    <p className="text-sm text-gray-600 mb-4">
+                        Los servicios seleccionados se agregarán automáticamente como ítems del envío.
+                    </p>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* Lift Gate */}
+                        <div className={`p-4 rounded-xl border ${shipment.liftGate === 'YES' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
+                            <div className="flex justify-between items-center mb-2">
+                                <label className={`text-sm font-medium ${shipment.liftGate === 'YES' ? 'text-blue-800' : 'text-gray-800'}`}>Lift Gate</label>
+                                <div className="flex space-x-1">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => handleServiceChange('liftGate', 'YES')}
+                                        className={`px-3 py-1 text-xs rounded-l-lg border border-r-0 ${
+                                            shipment.liftGate === 'YES' 
+                                                ? 'bg-blue-500 text-white border-blue-500' 
+                                                : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+                                        }`}
+                                    >
+                                        <span className="flex items-center">
+                                            {shipment.liftGate === 'YES' && <Check className="w-3 h-3 mr-1" />}
+                                            SÍ
+                                        </span>
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => handleServiceChange('liftGate', 'NO')}
+                                        className={`px-3 py-1 text-xs rounded-r-lg border ${
+                                            shipment.liftGate === 'NO' 
+                                                ? 'bg-gray-500 text-white border-gray-500' 
+                                                : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+                                        }`}
+                                    >
+                                        <span className="flex items-center">
+                                            {shipment.liftGate === 'NO' && <X className="w-3 h-3 mr-1" />}
+                                            NO
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
+                            {shipment.liftGate === 'YES' && (
+                                <div className="flex items-center mt-2">
+                                    <span className="text-sm text-blue-700 mr-2">Precio:</span>
+                                    <div className="relative flex-1">
+                                        <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-500">$</span>
+                                        <input
+                                            type="number"
+                                            value={shipment.servicePrices.liftGate}
+                                            onChange={(e) => handleServicePriceChange('liftGate', e.target.value)}
+                                            className="w-full pl-8 py-1.5 border border-blue-300 bg-blue-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                            min="0"
+                                            step="0.01"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        
+                        {/* Appointment */}
+                        <div className={`p-4 rounded-xl border ${shipment.appointment === 'YES' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
+                            <div className="flex justify-between items-center mb-2">
+                                <label className={`text-sm font-medium ${shipment.appointment === 'YES' ? 'text-blue-800' : 'text-gray-800'}`}>Appointment</label>
+                                <div className="flex space-x-1">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => handleServiceChange('appointment', 'YES')}
+                                        className={`px-3 py-1 text-xs rounded-l-lg border border-r-0 ${
+                                            shipment.appointment === 'YES' 
+                                                ? 'bg-blue-500 text-white border-blue-500' 
+                                                : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+                                        }`}
+                                    >
+                                        <span className="flex items-center">
+                                            {shipment.appointment === 'YES' && <Check className="w-3 h-3 mr-1" />}
+                                            SÍ
+                                        </span>
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => handleServiceChange('appointment', 'NO')}
+                                        className={`px-3 py-1 text-xs rounded-r-lg border ${
+                                            shipment.appointment === 'NO' 
+                                                ? 'bg-gray-500 text-white border-gray-500' 
+                                                : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+                                        }`}
+                                    >
+                                        <span className="flex items-center">
+                                            {shipment.appointment === 'NO' && <X className="w-3 h-3 mr-1" />}
+                                            NO
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
+                            {shipment.appointment === 'YES' && (
+                                <div className="flex items-center mt-2">
+                                    <span className="text-sm text-blue-700 mr-2">Precio:</span>
+                                    <div className="relative flex-1">
+                                        <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-500">$</span>
+                                        <input
+                                            type="number"
+                                            value={shipment.servicePrices.appointment}
+                                            onChange={(e) => handleServicePriceChange('appointment', e.target.value)}
+                                            className="w-full pl-8 py-1.5 border border-blue-300 bg-blue-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                            min="0"
+                                            step="0.01"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        
+                        {/* Pallet Jack */}
+                        <div className={`p-4 rounded-xl border ${shipment.palletJack === 'YES' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
+                            <div className="flex justify-between items-center mb-2">
+                                <label className={`text-sm font-medium ${shipment.palletJack === 'YES' ? 'text-blue-800' : 'text-gray-800'}`}>Pallet Jack</label>
+                                <div className="flex space-x-1">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => handleServiceChange('palletJack', 'YES')}
+                                        className={`px-3 py-1 text-xs rounded-l-lg border border-r-0 ${
+                                            shipment.palletJack === 'YES' 
+                                                ? 'bg-blue-500 text-white border-blue-500' 
+                                                : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+                                        }`}
+                                    >
+                                        <span className="flex items-center">
+                                            {shipment.palletJack === 'YES' && <Check className="w-3 h-3 mr-1" />}
+                                            SÍ
+                                        </span>
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => handleServiceChange('palletJack', 'NO')}
+                                        className={`px-3 py-1 text-xs rounded-r-lg border ${
+                                            shipment.palletJack === 'NO' 
+                                                ? 'bg-gray-500 text-white border-gray-500' 
+                                                : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+                                        }`}
+                                    >
+                                        <span className="flex items-center">
+                                            {shipment.palletJack === 'NO' && <X className="w-3 h-3 mr-1" />}
+                                            NO
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
+                            {shipment.palletJack === 'YES' && (
+                                <div className="flex items-center mt-2">
+                                    <span className="text-sm text-blue-700 mr-2">Precio:</span>
+                                    <div className="relative flex-1">
+                                        <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-500">$</span>
+                                        <input
+                                            type="number"
+                                            value={shipment.servicePrices.palletJack}
+                                            onChange={(e) => handleServicePriceChange('palletJack', e.target.value)}
+                                            className="w-full pl-8 py-1.5 border border-blue-300 bg-blue-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                            min="0"
+                                            step="0.01"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
 
                 {/* Lista de items */}
                 <div className="border-t pt-6">
@@ -162,10 +425,11 @@ const ItemsStep = ({ shipment, setShipment, errors, setErrors }) => {
                         </div>
                     )}
 
-                    {shipment.items.length === 0 ? (
+                    {allItems.length === 0 ? (
                         <div className="text-center py-8 border border-dashed rounded-xl bg-gray-50">
                             <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                             <p className="text-gray-500">No hay items agregados al envío</p>
+                            <p className="text-sm text-gray-400 mt-1">Agrega un item o selecciona servicios adicionales</p>
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
@@ -190,6 +454,7 @@ const ItemsStep = ({ shipment, setShipment, errors, setErrors }) => {
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
+                                    {/* Ítems regulares */}
                                     {shipment.items.map((item) => (
                                         <tr key={item.id} className="hover:bg-gray-50 transition-colors">
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -209,9 +474,33 @@ const ItemsStep = ({ shipment, setShipment, errors, setErrors }) => {
                                                     type="button"
                                                     onClick={() => handleRemoveItem(item.id)}
                                                     className="text-red-600 hover:text-red-900 transition-colors"
+                                                    title="Eliminar item"
                                                 >
                                                     <Trash2 className="w-5 h-5" />
                                                 </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+
+                                    {/* Ítems de servicios */}
+                                    {serviceItems.map((item) => (
+                                        <tr key={item.id} className="bg-blue-50 hover:bg-blue-100 transition-colors">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-700">
+                                                {item.descripcion}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-700 text-right">
+                                                {item.cantidad}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-700 text-right">
+                                                {parseFloat(item.pesoTotal).toFixed(2)}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-700 text-right">
+                                                ${parseFloat(item.valorTotal).toFixed(2)}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                <span className="text-blue-400 italic text-xs">
+                                                    Servicio
+                                                </span>
                                             </td>
                                         </tr>
                                     ))}

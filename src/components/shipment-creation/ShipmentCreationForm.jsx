@@ -20,6 +20,8 @@ const INITIAL_SHIPMENT = {
     refCode: '',
     cliente: '',
     clientId: null,
+    subCliente: '',
+    subClientId: null,
     direccionOrigen: '',
     latitudOrigen: '',
     longitudOrigen: '',
@@ -54,6 +56,7 @@ const ShipmentCreationForm = () => {
     const [transportistas, setTransportistas] = useState([]);
     const [loadingTransportistas, setLoadingTransportistas] = useState(true);
     const [selectedClient, setSelectedClient] = useState(null);
+    const [selectedSubClient, setSelectedSubClient] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [currentStep, setCurrentStep] = useState(0);
 
@@ -139,17 +142,46 @@ const ShipmentCreationForm = () => {
             setShipment(prev => ({
                 ...prev,
                 cliente: client.business_name || client.name,
-                clientId: client.id
+                clientId: client.id,
+                // Al cambiar el cliente principal, resetear el sub cliente
+                subCliente: '',
+                subClientId: null
             }));
+            setSelectedSubClient(null);
             setErrors(prev => ({ ...prev, cliente: undefined }));
         } else {
             setShipment(prev => ({
                 ...prev,
-                cliente: client
+                cliente: client,
+                clientId: null, // Asegurar que se limpie el ID si solo hay texto
+                // Si se borra el cliente, también borrar el sub cliente
+                subCliente: '',
+                subClientId: null
             }));
+            setSelectedClient(null);
+            setSelectedSubClient(null);
             if (client) {
                 setErrors(prev => ({ ...prev, cliente: undefined }));
             }
+        }
+    };
+
+    // Manejar selección de sub cliente
+    const handleSelectSubClient = (subClientName, subClientId) => {
+        setShipment(prev => ({
+            ...prev,
+            subCliente: subClientName,
+            subClientId: subClientId
+        }));
+
+        if (subClientId) {
+            setSelectedSubClient({
+                id: subClientId,
+                name: subClientName
+            });
+        } else {
+            // Si solo hay texto (entrada manual), mantener el subCliente pero sin ID
+            setSelectedSubClient(null);
         }
     };
 
@@ -162,7 +194,17 @@ const ShipmentCreationForm = () => {
         if (!shipment.direccionOrigen.trim()) newErrors.direccionOrigen = 'La dirección de origen es requerida';
         if (!shipment.direccionDestino.trim()) newErrors.direccionDestino = 'La dirección de destino es requerida';
         if (!shipment.transportistaId) newErrors.transportistaId = 'Debe seleccionar un transportista';
-        if (shipment.items.length === 0) newErrors.items = 'Debe agregar al menos un item';
+
+        // Verificar si hay ítems (regulares o servicios)
+        const hasRegularItems = shipment.items.length > 0;
+        const hasServiceItems =
+            shipment.liftGate === 'YES' ||
+            shipment.appointment === 'YES' ||
+            shipment.palletJack === 'YES';
+
+        if (!hasRegularItems && !hasServiceItems) {
+            newErrors.items = 'Debe agregar al menos un item o seleccionar algún servicio adicional';
+        }
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -209,6 +251,16 @@ const ShipmentCreationForm = () => {
                 formData.append('client_id', selectedClient.id);
             }
 
+            // Si hay un sub cliente seleccionado, incluir su ID
+            if (selectedSubClient && selectedSubClient.id) {
+                formData.append('subclient_id', selectedSubClient.id);
+            }
+
+            // Siempre incluir el texto del subcliente si existe (sea seleccionado o manual)
+            if (shipment.subCliente) {
+                formData.append('subclient', shipment.subCliente);
+            }
+
             // Transformar items para el backend
             const itemsForBackend = shipment.items.map(item => ({
                 description: item.descripcion,
@@ -216,6 +268,35 @@ const ShipmentCreationForm = () => {
                 weight: item.pesoTotal,
                 value: item.valorTotal
             }));
+
+            // Agregar servicios como ítems si están activos
+            if (shipment.liftGate === 'YES') {
+                itemsForBackend.push({
+                    description: 'Servicio: Lift Gate',
+                    quantity: 1,
+                    weight: 0,
+                    value: parseFloat(shipment.servicePrices.liftGate) || 0
+                });
+            }
+
+            if (shipment.appointment === 'YES') {
+                itemsForBackend.push({
+                    description: 'Servicio: Appointment',
+                    quantity: 1,
+                    weight: 0,
+                    value: parseFloat(shipment.servicePrices.appointment) || 0
+                });
+            }
+
+            if (shipment.palletJack === 'YES') {
+                itemsForBackend.push({
+                    description: 'Servicio: Pallet Jack',
+                    quantity: 1,
+                    weight: 0,
+                    value: parseFloat(shipment.servicePrices.palletJack) || 0
+                });
+            }
+
             formData.append('items', JSON.stringify(itemsForBackend));
 
             // Agregar los archivos PDF
@@ -270,9 +351,13 @@ const ShipmentCreationForm = () => {
             case 1: // Direcciones
                 return shipment.direccionOrigen.trim() !== '' && shipment.direccionDestino.trim() !== '';
             case 2: // Items
-                return shipment.items.length > 0;
+                // Se puede avanzar si hay ítems o si hay servicios seleccionados
+                return shipment.items.length > 0 ||
+                    shipment.liftGate === 'YES' ||
+                    shipment.appointment === 'YES' ||
+                    shipment.palletJack === 'YES';
             case 3: // Servicios
-                return true; // Siempre se puede avanzar desde servicios
+                return shipment.transportistaId !== ''; // Requiere seleccionar transportista
             default:
                 return true;
         }
@@ -300,10 +385,9 @@ const ShipmentCreationForm = () => {
                         {/* Botón de guardar (visible solo en el último paso) */}
                         {currentStep === steps.length - 1 && (
                             <button
-                                type="submit"
-                                form="shipmentForm"
-                                className={`px-5 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors flex items-center ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''
-                                    }`}
+                                type="button" // Cambiado de "submit" a "button"
+                                onClick={handleSubmit} // Agregar onClick
+                                className={`px-5 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors flex items-center ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
                                 disabled={isSubmitting}
                             >
                                 <Save className="w-5 h-5 mr-2" />
@@ -397,7 +481,7 @@ const ShipmentCreationForm = () => {
                         </div>
 
                         {/* Formulario principal */}
-                        <form id="shipmentForm" onSubmit={handleSubmit} className="space-y-6">
+                        <form id="shipmentForm" onSubmit={(e) => e.preventDefault()} className="space-y-6">
                             {/* Contenido dinámico según el paso actual */}
                             <div className="animate-fadeIn">
                                 {currentStep === 0 && (
@@ -405,6 +489,7 @@ const ShipmentCreationForm = () => {
                                         shipment={shipment}
                                         handleChange={handleChange}
                                         handleSelectClient={handleSelectClient}
+                                        handleSelectSubClient={handleSelectSubClient}
                                         errors={errors}
                                     />
                                 )}
@@ -449,8 +534,7 @@ const ShipmentCreationForm = () => {
                                 <button
                                     type="button"
                                     onClick={prevStep}
-                                    className={`px-6 py-3 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors ${currentStep === 0 ? 'opacity-50 cursor-not-allowed' : ''
-                                        }`}
+                                    className={`px-6 py-3 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors ${currentStep === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     disabled={currentStep === 0}
                                 >
                                     Anterior
@@ -460,17 +544,16 @@ const ShipmentCreationForm = () => {
                                     <button
                                         type="button"
                                         onClick={nextStep}
-                                        className={`px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors ${!canProceed() ? 'opacity-70 cursor-not-allowed' : ''
-                                            }`}
+                                        className={`px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors ${!canProceed() ? 'opacity-70 cursor-not-allowed' : ''}`}
                                         disabled={!canProceed()}
                                     >
                                         Siguiente
                                     </button>
                                 ) : (
                                     <button
-                                        type="submit"
-                                        className={`px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors flex items-center ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''
-                                            }`}
+                                        type="button" // Cambiado de "submit" a "button"
+                                        onClick={handleSubmit} // Usar onClick en lugar de type="submit"
+                                        className={`px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors flex items-center ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
                                         disabled={isSubmitting}
                                     >
                                         {isSubmitting ? (

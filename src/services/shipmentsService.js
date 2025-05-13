@@ -68,6 +68,23 @@ export const shipmentsService = {
 
     createShipment: async (formData) => {
         try {
+            // Si los datos del cliente y subcliente se envían pero no están
+            // en el FormData, debemos asegurarnos de incluirlos
+            if (formData instanceof FormData) {
+                // Verificar que los campos de cliente y subcliente estén incluidos
+                if (!formData.has('client_id') && formData.get('clientId')) {
+                    formData.append('client_id', formData.get('clientId'));
+                }
+
+                if (!formData.has('subclient') && formData.get('subCliente')) {
+                    formData.append('subclient', formData.get('subCliente'));
+                }
+
+                if (!formData.has('subclient_id') && formData.get('subClientId')) {
+                    formData.append('subclient_id', formData.get('subClientId'));
+                }
+            }
+
             const response = await api.post('/shipment', formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
@@ -89,7 +106,6 @@ export const shipmentsService = {
     },
 
     // En src/services/shipmentsService.js
-    // Reemplazar o modificar el método updateShipment
     updateShipment: async (id, data) => {
         try {
             // Si hay archivos, usar FormData
@@ -108,6 +124,19 @@ export const shipmentsService = {
                         formData.append(key, value);
                     }
                 });
+
+                // Asegurar que se incluyan los campos de cliente y subcliente
+                if (data.clientId && !formData.has('client_id')) {
+                    formData.append('client_id', data.clientId);
+                }
+
+                if (data.subCliente && !formData.has('subclient')) {
+                    formData.append('subclient', data.subCliente);
+                }
+
+                if (data.subClientId && !formData.has('subclient_id')) {
+                    formData.append('subclient_id', data.subClientId);
+                }
 
                 const response = await api.put(`/shipment/${id}`, formData, {
                     headers: {
