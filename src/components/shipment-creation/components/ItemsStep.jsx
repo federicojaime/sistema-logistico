@@ -20,17 +20,17 @@ const ItemsStep = ({ shipment, setShipment, errors, setErrors }) => {
             ...prev,
             [service]: value
         }));
-        
+
         // Limpiar el error de items si existía y ahora hay servicios seleccionados
         if (errors.items) {
-            const hasServiceItems = 
-                (service === 'liftGate' && value === 'YES') || 
+            const hasServiceItems =
+                (service === 'liftGate' && value === 'YES') ||
                 (service !== 'liftGate' && shipment.liftGate === 'YES') ||
-                (service === 'appointment' && value === 'YES') || 
+                (service === 'appointment' && value === 'YES') ||
                 (service !== 'appointment' && shipment.appointment === 'YES') ||
-                (service === 'palletJack' && value === 'YES') || 
+                (service === 'palletJack' && value === 'YES') ||
                 (service !== 'palletJack' && shipment.palletJack === 'YES');
-                
+
             if (hasServiceItems) {
                 setErrors(prev => ({ ...prev, items: undefined }));
             }
@@ -51,7 +51,7 @@ const ItemsStep = ({ shipment, setShipment, errors, setErrors }) => {
     // Crear array de ítems de servicios basados en los servicios seleccionados
     const getServiceItems = () => {
         const serviceItems = [];
-        
+
         // Agregar Lift Gate si está activo
         if (shipment.liftGate === 'YES') {
             serviceItems.push({
@@ -64,7 +64,7 @@ const ItemsStep = ({ shipment, setShipment, errors, setErrors }) => {
                 serviceType: 'liftGate'
             });
         }
-        
+
         // Agregar Appointment si está activo
         if (shipment.appointment === 'YES') {
             serviceItems.push({
@@ -77,7 +77,7 @@ const ItemsStep = ({ shipment, setShipment, errors, setErrors }) => {
                 serviceType: 'appointment'
             });
         }
-        
+
         // Agregar Pallet Jack si está activo
         if (shipment.palletJack === 'YES') {
             serviceItems.push({
@@ -90,10 +90,10 @@ const ItemsStep = ({ shipment, setShipment, errors, setErrors }) => {
                 serviceType: 'palletJack'
             });
         }
-        
+
         return serviceItems;
     };
-    
+
     const serviceItems = getServiceItems();
 
     const handleItemChange = (field, value) => {
@@ -141,7 +141,7 @@ const ItemsStep = ({ shipment, setShipment, errors, setErrors }) => {
         }));
     };
 
-    // Calcular totales
+    // Calcular totales - CORREGIDO: el peso NO se multiplica por cantidad
     const calculateTotals = () => {
         // Combinar ítems regulares y de servicios
         const allItems = [...shipment.items, ...serviceItems];
@@ -149,18 +149,20 @@ const ItemsStep = ({ shipment, setShipment, errors, setErrors }) => {
         return allItems.reduce(
             (acc, item) => ({
                 cantidad: acc.cantidad + parseInt(item.cantidad || 1),
-                peso: acc.peso + (parseFloat(item.pesoTotal || 0) * parseInt(item.cantidad || 1)),
+                // El peso NO se multiplica por cantidad porque pesoTotal ya es el peso total del ítem
+                peso: acc.peso + parseFloat(item.pesoTotal || 0),
+                // El valor SÍ se multiplica por cantidad
                 valor: acc.valor + (parseFloat(item.valorTotal || 0) * parseInt(item.cantidad || 1)),
             }),
             { cantidad: 0, peso: 0, valor: 0 }
         );
     };
-    
+
     const totals = calculateTotals();
 
     // Todos los items combinados (regulares + servicios)
     const allItems = [...shipment.items, ...serviceItems];
-    
+
     // Verificar si hay ítems válidos (regulares o servicios)
     const hasValidItems = shipment.items.length > 0 || serviceItems.length > 0;
 
@@ -218,7 +220,11 @@ const ItemsStep = ({ shipment, setShipment, errors, setErrors }) => {
                                 className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 min="0"
                                 step="0.1"
+                                placeholder="Peso total del ítem"
                             />
+                            <p className="text-xs text-gray-500 mt-1">
+                                Ingrese el peso total del ítem (no se multiplicará por cantidad)
+                            </p>
                         </div>
 
                         <div>
@@ -245,42 +251,40 @@ const ItemsStep = ({ shipment, setShipment, errors, setErrors }) => {
                         </div>
                     </div>
                 </div>
-                
+
                 {/* Servicios adicionales */}
                 <div className="mb-6 border-t pt-6">
                     <h3 className="font-medium text-gray-800 mb-4">Servicios Adicionales</h3>
                     <p className="text-sm text-gray-600 mb-4">
                         Los servicios seleccionados se agregarán automáticamente como ítems del envío.
                     </p>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         {/* Lift Gate */}
                         <div className={`p-4 rounded-xl border ${shipment.liftGate === 'YES' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
                             <div className="flex justify-between items-center mb-2">
                                 <label className={`text-sm font-medium ${shipment.liftGate === 'YES' ? 'text-blue-800' : 'text-gray-800'}`}>Lift Gate</label>
                                 <div className="flex space-x-1">
-                                    <button 
-                                        type="button" 
+                                    <button
+                                        type="button"
                                         onClick={() => handleServiceChange('liftGate', 'YES')}
-                                        className={`px-3 py-1 text-xs rounded-l-lg border border-r-0 ${
-                                            shipment.liftGate === 'YES' 
-                                                ? 'bg-blue-500 text-white border-blue-500' 
+                                        className={`px-3 py-1 text-xs rounded-l-lg border border-r-0 ${shipment.liftGate === 'YES'
+                                                ? 'bg-blue-500 text-white border-blue-500'
                                                 : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
-                                        }`}
+                                            }`}
                                     >
                                         <span className="flex items-center">
                                             {shipment.liftGate === 'YES' && <Check className="w-3 h-3 mr-1" />}
                                             SÍ
                                         </span>
                                     </button>
-                                    <button 
-                                        type="button" 
+                                    <button
+                                        type="button"
                                         onClick={() => handleServiceChange('liftGate', 'NO')}
-                                        className={`px-3 py-1 text-xs rounded-r-lg border ${
-                                            shipment.liftGate === 'NO' 
-                                                ? 'bg-gray-500 text-white border-gray-500' 
+                                        className={`px-3 py-1 text-xs rounded-r-lg border ${shipment.liftGate === 'NO'
+                                                ? 'bg-gray-500 text-white border-gray-500'
                                                 : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
-                                        }`}
+                                            }`}
                                     >
                                         <span className="flex items-center">
                                             {shipment.liftGate === 'NO' && <X className="w-3 h-3 mr-1" />}
@@ -306,34 +310,32 @@ const ItemsStep = ({ shipment, setShipment, errors, setErrors }) => {
                                 </div>
                             )}
                         </div>
-                        
+
                         {/* Appointment */}
                         <div className={`p-4 rounded-xl border ${shipment.appointment === 'YES' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
                             <div className="flex justify-between items-center mb-2">
                                 <label className={`text-sm font-medium ${shipment.appointment === 'YES' ? 'text-blue-800' : 'text-gray-800'}`}>Appointment</label>
                                 <div className="flex space-x-1">
-                                    <button 
-                                        type="button" 
+                                    <button
+                                        type="button"
                                         onClick={() => handleServiceChange('appointment', 'YES')}
-                                        className={`px-3 py-1 text-xs rounded-l-lg border border-r-0 ${
-                                            shipment.appointment === 'YES' 
-                                                ? 'bg-blue-500 text-white border-blue-500' 
+                                        className={`px-3 py-1 text-xs rounded-l-lg border border-r-0 ${shipment.appointment === 'YES'
+                                                ? 'bg-blue-500 text-white border-blue-500'
                                                 : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
-                                        }`}
+                                            }`}
                                     >
                                         <span className="flex items-center">
                                             {shipment.appointment === 'YES' && <Check className="w-3 h-3 mr-1" />}
                                             SÍ
                                         </span>
                                     </button>
-                                    <button 
-                                        type="button" 
+                                    <button
+                                        type="button"
                                         onClick={() => handleServiceChange('appointment', 'NO')}
-                                        className={`px-3 py-1 text-xs rounded-r-lg border ${
-                                            shipment.appointment === 'NO' 
-                                                ? 'bg-gray-500 text-white border-gray-500' 
+                                        className={`px-3 py-1 text-xs rounded-r-lg border ${shipment.appointment === 'NO'
+                                                ? 'bg-gray-500 text-white border-gray-500'
                                                 : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
-                                        }`}
+                                            }`}
                                     >
                                         <span className="flex items-center">
                                             {shipment.appointment === 'NO' && <X className="w-3 h-3 mr-1" />}
@@ -359,34 +361,32 @@ const ItemsStep = ({ shipment, setShipment, errors, setErrors }) => {
                                 </div>
                             )}
                         </div>
-                        
+
                         {/* Pallet Jack */}
                         <div className={`p-4 rounded-xl border ${shipment.palletJack === 'YES' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
                             <div className="flex justify-between items-center mb-2">
                                 <label className={`text-sm font-medium ${shipment.palletJack === 'YES' ? 'text-blue-800' : 'text-gray-800'}`}>Pallet Jack</label>
                                 <div className="flex space-x-1">
-                                    <button 
-                                        type="button" 
+                                    <button
+                                        type="button"
                                         onClick={() => handleServiceChange('palletJack', 'YES')}
-                                        className={`px-3 py-1 text-xs rounded-l-lg border border-r-0 ${
-                                            shipment.palletJack === 'YES' 
-                                                ? 'bg-blue-500 text-white border-blue-500' 
+                                        className={`px-3 py-1 text-xs rounded-l-lg border border-r-0 ${shipment.palletJack === 'YES'
+                                                ? 'bg-blue-500 text-white border-blue-500'
                                                 : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
-                                        }`}
+                                            }`}
                                     >
                                         <span className="flex items-center">
                                             {shipment.palletJack === 'YES' && <Check className="w-3 h-3 mr-1" />}
                                             SÍ
                                         </span>
                                     </button>
-                                    <button 
-                                        type="button" 
+                                    <button
+                                        type="button"
                                         onClick={() => handleServiceChange('palletJack', 'NO')}
-                                        className={`px-3 py-1 text-xs rounded-r-lg border ${
-                                            shipment.palletJack === 'NO' 
-                                                ? 'bg-gray-500 text-white border-gray-500' 
+                                        className={`px-3 py-1 text-xs rounded-r-lg border ${shipment.palletJack === 'NO'
+                                                ? 'bg-gray-500 text-white border-gray-500'
                                                 : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
-                                        }`}
+                                            }`}
                                     >
                                         <span className="flex items-center">
                                             {shipment.palletJack === 'NO' && <X className="w-3 h-3 mr-1" />}
@@ -443,7 +443,7 @@ const ItemsStep = ({ shipment, setShipment, errors, setErrors }) => {
                                             Cantidad
                                         </th>
                                         <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Peso (lb)
+                                            Peso Total (lb)
                                         </th>
                                         <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                                             Valor ($)

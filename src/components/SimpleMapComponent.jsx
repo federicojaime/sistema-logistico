@@ -21,9 +21,8 @@ L.Marker.prototype.options.icon = DefaultIcon;
 // Función de geocodificación usando Nominatim
 const geocodeAddress = async (address) => {
   try {
-    console.log("Geocodificando dirección:", address);
     const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=5&addressdetails=1`,
       {
         headers: {
           'Accept-Language': 'es',
@@ -37,27 +36,16 @@ const geocodeAddress = async (address) => {
     }
     
     const data = await response.json();
-    console.log("Resultados geocodificación:", data);
-    
-    if (data && data.length > 0) {
-      return {
-        lat: parseFloat(data[0].lat),
-        lng: parseFloat(data[0].lon),
-        displayName: data[0].display_name
-      };
-    }
-    
-    return null;
+    return data || [];
   } catch (error) {
     console.error('Error en geocodificación:', error);
-    return null;
+    return [];
   }
 };
 
 // Función de geocodificación inversa
 const reverseGeocode = async (lat, lng) => {
   try {
-    console.log("Geocodificación inversa para:", lat, lng);
     const response = await fetch(
       `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
       {
@@ -73,8 +61,6 @@ const reverseGeocode = async (lat, lng) => {
     }
     
     const data = await response.json();
-    console.log("Resultados geocodificación inversa:", data);
-    
     if (data && data.display_name) {
       return data.display_name;
     }
@@ -97,7 +83,6 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
   // Usar initialLocation si es válido, o DEFAULT_LOCATION
   let initialPos = DEFAULT_LOCATION;
   if (initialLocation) {
-    // Verificar que los valores lat y lng sean números válidos
     const validLat = initialLocation.lat !== undefined && 
                     initialLocation.lat !== null && 
                     !isNaN(Number(initialLocation.lat));
@@ -113,7 +98,6 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
         address: initialLocation.address || ''
       };
     } else if (initialLocation.address) {
-      // Si solo tenemos dirección pero no coordenadas válidas
       initialPos = {
         ...DEFAULT_LOCATION,
         address: initialLocation.address
@@ -121,48 +105,124 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
     }
   }
   
-  console.log("Initial position after validation:", initialPos);
-  
   const [position, setPosition] = useState({
     lat: initialPos.lat,
     lng: initialPos.lng
   });
   const [address, setAddress] = useState(initialPos.address || '');
   const [searchText, setSearchText] = useState(initialPos.address || '');
+  const [searchResults, setSearchResults] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isUserTyping, setIsUserTyping] = useState(false);
   
   const mapRef = useRef(null);
   const markerRef = useRef(null);
-  const mapContainerId = `map-${Date.now()}`;
+  const searchTimeoutRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+  const mapContainerIdRef = useRef(`map-${Math.random().toString(36).substring(2, 11)}`);
+
+  // Función para obtener sugerencias
+  const getSuggestions = async (query) => {
+    if (!query.trim() || query.length < 3) {
+      setSearchResults([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    try {
+      const results = await geocodeAddress(query);
+      setSearchResults(results.slice(0, 5));
+      setShowSuggestions(results.length > 0);
+    } catch (error) {
+      console.error('Error obteniendo sugerencias:', error);
+      setSearchResults([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  // Manejar cambio en el campo de búsqueda
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchText(value);
+    setIsUserTyping(true);
+    setError('');
+
+    // Cancelar timeouts anteriores
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Obtener sugerencias con debounce
+    if (value.length >= 3) {
+      searchTimeoutRef.current = setTimeout(() => {
+        getSuggestions(value);
+      }, 400);
+    } else {
+      setSearchResults([]);
+      setShowSuggestions(false);
+    }
+
+    // Marcar que ya no está escribiendo después de un tiempo
+    typingTimeoutRef.current = setTimeout(() => {
+      setIsUserTyping(false);
+    }, 2000);
+  };
+
+  // Seleccionar una sugerencia
+  const selectSuggestion = (result) => {
+    const newPos = { lat: parseFloat(result.lat), lng: parseFloat(result.lon) };
+    
+    setPosition(newPos);
+    setAddress(result.display_name);
+    setSearchText(result.display_name);
+    setSearchResults([]);
+    setShowSuggestions(false);
+    setIsUserTyping(false);
+    
+    if (mapRef.current && markerRef.current) {
+      markerRef.current.setLatLng([newPos.lat, newPos.lng]);
+      mapRef.current.setView([newPos.lat, newPos.lng], 15);
+    }
+  };
 
   // Inicializar el mapa
   useEffect(() => {
-    console.log("Inicializando mapa con:", position);
+    const mapContainerId = mapContainerIdRef.current;
     
-    // Verificar que el contenedor existe
     const container = document.getElementById(mapContainerId);
     if (!container) {
       console.error(`El contenedor con ID ${mapContainerId} no existe`);
       return;
     }
+
+    // Si ya existe un mapa, no crear otro
+    if (mapRef.current) {
+      return;
+    }
     
     try {
-      // Crear mapa
-      const map = L.map(mapContainerId).setView([position.lat, position.lng], 13);
+      const map = L.map(mapContainerId, {
+        zoomControl: true,
+        scrollWheelZoom: true
+      }).setView([position.lat, position.lng], 13);
       mapRef.current = map;
       
-      // Añadir capa de OpenStreetMap
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       }).addTo(map);
       
-      // Añadir marcador
       const marker = L.marker([position.lat, position.lng], { draggable: true }).addTo(map);
       markerRef.current = marker;
       
       // Manejar arrastre del marcador
       marker.on('dragend', async function(e) {
+        if (isUserTyping) return;
+        
         const pos = e.target.getLatLng();
         setPosition({ lat: pos.lat, lng: pos.lng });
         
@@ -170,20 +230,19 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
           const addressResult = await reverseGeocode(pos.lat, pos.lng);
           if (addressResult) {
             setAddress(addressResult);
-            setSearchText(addressResult);
           } else {
             setAddress(`${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`);
-            setSearchText(`${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`);
           }
         } catch (err) {
           console.error('Error en geocodificación inversa:', err);
           setAddress(`${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`);
-          setSearchText(`${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`);
         }
       });
       
       // Manejar clic en el mapa
       map.on('click', async function(e) {
+        if (isUserTyping) return;
+        
         const pos = e.latlng;
         marker.setLatLng(pos);
         setPosition({ lat: pos.lat, lng: pos.lng });
@@ -192,42 +251,28 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
           const addressResult = await reverseGeocode(pos.lat, pos.lng);
           if (addressResult) {
             setAddress(addressResult);
-            setSearchText(addressResult);
           } else {
             setAddress(`${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`);
-            setSearchText(`${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`);
           }
         } catch (err) {
           console.error('Error en geocodificación inversa:', err);
           setAddress(`${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`);
-          setSearchText(`${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`);
         }
+        
+        setShowSuggestions(false);
       });
-      
-      // Obtener dirección inicial si es necesario
-      if (initialPos.lat && initialPos.lng && !initialPos.address) {
-        (async () => {
-          try {
-            const addressResult = await reverseGeocode(initialPos.lat, initialPos.lng);
-            if (addressResult) {
-              setAddress(addressResult);
-              setSearchText(addressResult);
-            }
-          } catch (err) {
-            console.error('Error al obtener dirección inicial:', err);
-          }
-        })();
-      }
       
       // Si hay una dirección inicial pero no coordenadas, geocodificar
       if (initialPos.address && (!initialPos.lat || !initialPos.lng)) {
         (async () => {
           try {
-            const result = await geocodeAddress(initialPos.address);
-            if (result) {
-              setPosition({ lat: result.lat, lng: result.lng });
-              marker.setLatLng([result.lat, result.lng]);
-              map.setView([result.lat, result.lng], 15);
+            const results = await geocodeAddress(initialPos.address);
+            if (results && results.length > 0) {
+              const result = results[0];
+              const newPos = { lat: parseFloat(result.lat), lng: parseFloat(result.lon) };
+              setPosition(newPos);
+              marker.setLatLng([newPos.lat, newPos.lng]);
+              map.setView([newPos.lat, newPos.lng], 15);
             }
           } catch (err) {
             console.error('Error al geocodificar dirección inicial:', err);
@@ -241,32 +286,55 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
     
     // Limpiar al desmontar
     return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
       if (mapRef.current) {
-        console.log("Desmontando mapa");
         mapRef.current.remove();
         mapRef.current = null;
         markerRef.current = null;
       }
     };
-  }, [mapContainerId]);
+  }, []);
+
+  // Ocultar sugerencias cuando se hace clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('.search-container')) {
+        setShowSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   
-  // Manejar búsqueda de dirección
-  const handleSearch = async () => {
+  // Manejar búsqueda manual
+  const handleManualSearch = async () => {
     if (!searchText.trim()) return;
     
     setLoading(true);
     setError('');
+    setShowSuggestions(false);
+    setIsUserTyping(false);
     
     try {
-      const result = await geocodeAddress(searchText);
+      const results = await geocodeAddress(searchText);
       
-      if (result) {
-        setPosition({ lat: result.lat, lng: result.lng });
-        setAddress(result.displayName);
+      if (results && results.length > 0) {
+        const result = results[0];
+        const newPos = { lat: parseFloat(result.lat), lng: parseFloat(result.lon) };
+        
+        setPosition(newPos);
+        setAddress(result.display_name);
+        setSearchText(result.display_name);
         
         if (mapRef.current && markerRef.current) {
-          markerRef.current.setLatLng([result.lat, result.lng]);
-          mapRef.current.setView([result.lat, result.lng], 15);
+          markerRef.current.setLatLng([newPos.lat, newPos.lng]);
+          mapRef.current.setView([newPos.lat, newPos.lng], 15);
         }
       } else {
         setError('No se encontró la dirección. Intente con otra búsqueda o seleccione directamente en el mapa.');
@@ -279,12 +347,30 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
     }
   };
   
-  // Manejar tecla Enter en el campo de búsqueda
+  // Manejar teclas en el campo de búsqueda
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      handleSearch();
+      setShowSuggestions(false);
+      handleManualSearch();
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
     }
+  };
+
+  // Manejar foco en el campo
+  const handleFocus = () => {
+    setIsUserTyping(true);
+    if (searchText.length >= 3 && searchResults.length > 0) {
+      setShowSuggestions(true);
+    }
+  };
+
+  // Manejar pérdida de foco
+  const handleBlur = () => {
+    setTimeout(() => {
+      setShowSuggestions(false);
+    }, 200);
   };
   
   // Confirmar ubicación
@@ -298,22 +384,58 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
   
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex gap-2">
-        <input
-          type="text"
-          className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="Buscar dirección (ej: San Luis 1234, Argentina)"
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          onKeyPress={handleKeyPress}
-        />
-        <button
-          onClick={handleSearch}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          disabled={loading}
-        >
-          {loading ? '...' : 'Buscar'}
-        </button>
+      {/* Contenedor de búsqueda con z-index alto */}
+      <div className="search-container relative" style={{ zIndex: 1000 }}>
+        <div className="flex gap-2">
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Buscar dirección (ej: San Luis 1234, Argentina)"
+              value={searchText}
+              onChange={handleSearchChange}
+              onKeyPress={handleKeyPress}
+              onFocus={handleFocus}
+              onBlur={handleBlur}
+              autoComplete="off"
+            />
+            
+            {/* Lista de sugerencias con z-index muy alto */}
+            {showSuggestions && searchResults.length > 0 && (
+              <div 
+                className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-xl mt-1 max-h-60 overflow-y-auto"
+                style={{ zIndex: 9999 }}
+              >
+                {searchResults.map((result, index) => (
+                  <div
+                    key={`${result.place_id || index}`}
+                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      selectSuggestion(result);
+                    }}
+                  >
+                    <div className="text-sm font-medium text-gray-800">
+                      {result.display_name}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {result.type && `${result.type} • `}
+                      {parseFloat(result.lat).toFixed(4)}, {parseFloat(result.lon).toFixed(4)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          <button
+            onClick={handleManualSearch}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            disabled={loading}
+          >
+            {loading ? '...' : 'Buscar'}
+          </button>
+        </div>
       </div>
       
       {error && (
@@ -322,14 +444,15 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
         </div>
       )}
       
+      {/* Contenedor del mapa con z-index bajo */}
       <div
-        id={mapContainerId}
+        id={mapContainerIdRef.current}
         className="w-full rounded-lg border border-gray-300"
-        style={{ height: '300px' }}
+        style={{ height: '300px', zIndex: 1 }}
       ></div>
       
       <div className="text-xs text-gray-500 italic">
-        Busca una dirección usando el campo de arriba o haz clic directamente en cualquier punto del mapa.
+        Escribe una dirección para ver sugerencias, selecciona una sugerencia, presiona Enter para buscar, o haz clic directamente en el mapa.
       </div>
       
       <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
@@ -344,7 +467,7 @@ const SimpleMapComponent = ({ initialLocation, onSelectLocation }) => {
           </div>
         </div>
         <div className="mt-2">
-          <p className="text-sm font-semibold">Dirección:</p>
+          <p className="text-sm font-semibold">Dirección encontrada:</p>
           <p className="text-sm break-words">{address || 'No disponible'}</p>
         </div>
       </div>

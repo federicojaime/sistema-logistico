@@ -22,17 +22,54 @@ const BasicFilters = ({
         'todos': 'bg-gray-400'
     };
 
+    // Función para limpiar espacios del texto de búsqueda (solo múltiples espacios)
+    const cleanSearchQuery = (value) => {
+        return value
+            .replace(/\s+/g, ' '); // Reemplaza múltiples espacios consecutivos por uno solo (pero permite espacios normales)
+    };
+
+    // Manejar cambios en el campo de búsqueda
+    const handleSearchChange = (e) => {
+        const rawValue = e.target.value;
+        
+        // Si el campo está completamente vacío, no aplicar limpieza
+        if (rawValue === '') {
+            setSearchQuery('');
+            return;
+        }
+        
+        // Solo limpiar múltiples espacios, pero permitir espacios normales
+        const cleanedValue = cleanSearchQuery(rawValue);
+        setSearchQuery(cleanedValue);
+    };
+
+    // Manejar el evento de pegado
+    const handlePaste = (e) => {
+        // Prevenir el comportamiento por defecto
+        e.preventDefault();
+        
+        // Obtener el texto pegado
+        const pastedText = e.clipboardData.getData('text');
+        
+        // Limpiar el texto pegado (aquí sí aplicamos trim completo)
+        const cleanedText = pastedText.trim().replace(/\s+/g, ' ');
+        
+        // Establecer el valor limpio
+        setSearchQuery(cleanedText);
+    };
+
     return (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
-            {/* Búsqueda por texto */}
+            {/* Búsqueda por texto expandida */}
             <div className="relative col-span-1 md:col-span-2">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                     type="text"
-                    placeholder="Buscar por cliente o lugar..."
+                    placeholder="Buscar por cliente, subclient, comentario, ciudad o dirección..."
                     className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={handleSearchChange}
+                    onPaste={handlePaste}
                 />
                 {searchQuery && (
                     <button
@@ -41,6 +78,30 @@ const BasicFilters = ({
                     >
                         <X className="w-5 h-5" />
                     </button>
+                )}
+                
+                {/* Indicador de campos de búsqueda */}
+                {searchQuery && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-30">
+                        <p className="text-xs text-gray-500 mb-2">Buscando en:</p>
+                        <div className="flex flex-wrap gap-1">
+                            <span className="inline-flex items-center px-2 py-1 rounded-md bg-blue-100 text-blue-800 text-xs">
+                                Cliente
+                            </span>
+                            <span className="inline-flex items-center px-2 py-1 rounded-md bg-green-100 text-green-800 text-xs">
+                                Subclient
+                            </span>
+                            <span className="inline-flex items-center px-2 py-1 rounded-md bg-purple-100 text-purple-800 text-xs">
+                                Comentarios
+                            </span>
+                            <span className="inline-flex items-center px-2 py-1 rounded-md bg-orange-100 text-orange-800 text-xs">
+                                Direcciones
+                            </span>
+                            <span className="inline-flex items-center px-2 py-1 rounded-md bg-yellow-100 text-yellow-800 text-xs">
+                                Ref. Code
+                            </span>
+                        </div>
+                    </div>
                 )}
             </div>
 
