@@ -302,7 +302,7 @@ const DetailsTab = ({
                         </div>
                         <div className="text-left">
                             <h4 className="font-medium text-gray-800">Ir a destino</h4>
-                            <p className="text-sm text-gray-500">Origen → Destino</p>
+                            <p className="text-sm text-gray-500">Mi ubicación → Destino</p>
                         </div>
                     </button>
                 </div>

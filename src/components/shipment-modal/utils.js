@@ -85,7 +85,7 @@ export const getCurrentTotal = (items) => {
     return items.reduce((total, item) => {
         const value = parseFloat(item.value) || 0;
         const quantity = parseFloat(item.quantity) || 1;
-        return total + (value * quantity);
+        return total + (value);
     }, 0);
 };
 

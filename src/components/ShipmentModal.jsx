@@ -89,7 +89,7 @@ const ShipmentModal = ({
         return items.reduce((total, item) => {
             const value = parseFloat(item.value) || 0;
             const quantity = parseFloat(item.quantity) || 0;
-            return total + (value * quantity);
+            return total + (value);
         }, 0);
     };
 
@@ -336,13 +336,13 @@ const ShipmentModal = ({
         if (!e.target.files?.[0]) return;
         const file = e.target.files[0];
 
-        /* ───────────────── 1. validaciones rápidas ───────────────── */
+        /* ───────────────── 1. validaciones rápidas ───────────────── 
         if (file.type !== 'application/pdf') {
             setSuccessMessage('Solo se permiten archivos PDF');
             return;
-        }
-        if (file.size > 5 * 1024 * 1024) { // 5 MB
-            setSuccessMessage('El archivo es demasiado grande. Máximo 5 MB.');
+        }*/
+        if (file.size > 30 * 1024 * 1024) { // 30 MB
+            setSuccessMessage('El archivo es demasiado grande. Máximo 30 MB.');
             return;
         }
 

@@ -118,7 +118,7 @@ const ItemsTab = ({
 
             return {
                 weight: acc.weight + (weight * quantity),
-                value: acc.value + (value * quantity)
+                value: acc.value + (value)
             };
         }, { weight: 0, value: 0 });
     };
